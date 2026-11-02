@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Life OS</title>
+  <meta name="theme-color" content="#173b34">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!--
+    THESIS: 一本攤開的手帳日頁；拒絕「米白底＋白色圓角卡片網格」的 SaaS 預設。
+    OWN-WORLD: 墨綠書布封面（側欄）＋冷白 18px 方眼紙；藍黑墨水為唯一主色，朱紅只給「今天／超時」；領域色是螢光筆色帶；楷體標題、窄體數字。
+    STORY: 打開就是今天這一頁：今日欄的三個數字、今天要做的事、勾掉時墨水劃線。
+    FIRST VIEWPORT: 左側封面與伸到紙上的索引書籤；右側頁首楷體標題壓一條墨線，下方今日欄，再下是待辦清單。
+    FORM: 手帳日頁（使用者選定）；concept seed 97d9c2c1；code-led。
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+  -->
+  <div id="auth" hidden></div>
+
+  <div id="app" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <button class="menu-btn btn-ghost" id="menu-btn" aria-label="開啟選單">☰</button>
+        <span>Life OS</span>
+        <span class="mock-flag" id="mock-flag" hidden>模擬</span>
+        <button class="collapse-btn btn-ghost" id="collapse-btn" aria-label="收合側欄" aria-expanded="true" title="收合側欄（快捷鍵 [ ）">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14"/><path d="m15.5 10-2 2 2 2"/></svg>
+        </button>
+      </div>
+      <nav id="nav" aria-label="主選單"></nav>
+      <div class="running-bar" id="running-bar" hidden></div>
+      <div class="sidebar-foot">
+        <div class="user" id="user-email"></div>
+        <button class="btn-ghost" id="signout-btn">登出</button>
+      </div>
+    </aside>
+    <main id="main" tabindex="-1"></main>
+  </div>
+
+  <dialog id="task-dialog"><form method="dialog"></form></dialog>
+  <dialog id="memo-dialog" class="wide"></dialog>
+  <dialog id="area-dialog"></dialog>
+  <dialog id="digest-dialog" class="wide"></dialog>
+  <dialog id="note-dialog" class="wide"></dialog>
+  <dialog id="habit-dialog"></dialog>
+  <dialog id="project-dialog"></dialog>
+  <dialog id="google-dialog" class="wide"></dialog>
+  <dialog id="event-dialog"></dialog>
+  <dialog id="board-dialog"></dialog>
+  <dialog id="wrapup-dialog" class="wide"></dialog>
+  <dialog id="case-dialog" class="wide"></dialog>
+  <dialog id="phrase-dialog" class="wide"></dialog>
+  <dialog id="report-dialog" class="wide rp-dialog"></dialog>
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <button value="cancel" class="btn-ghost">取消</button>
+        <button value="ok" class="btn-primary danger" id="confirm-ok">刪除</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
