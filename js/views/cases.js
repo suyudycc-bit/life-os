@@ -4,11 +4,11 @@ import * as data from '../data.js';
 import { state, refreshTasks } from '../store.js';
 import { $, esc, toast, confirmDialog, linkify, linkLabel, formatDateTime } from '../ui.js';
 import { formatShort, formatHMS } from '../dates.js';
-import { openTaskEditor, openMemoDialog } from './task-actions.js';
+import { openTaskEditor, openMemoDialog, workTagsOf } from './task-actions.js';
 
 const PAGE = 50;
 const FILTER_KEY = 'lifeos-cases-filter';
-const f = { q: '', status: 'open', projectId: '', workTypeId: '', sort: 'recent' };
+const f = { q: '', status: 'open', projectId: '', projectTagId: '', workTypeId: '', sort: 'recent' };
 try { Object.assign(f, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')); } catch { /* 忽略 */ }
 const saveF = () => { try { localStorage.setItem(FILTER_KEY, JSON.stringify(f)); } catch { /* 忽略 */ } };
 let shown = PAGE;
@@ -22,8 +22,9 @@ export function mountCases(box) {
       <input type="search" id="cs-q" placeholder="搜尋案件編號、名稱、進度、連結…" aria-label="搜尋案件" value="${esc(f.q)}">
       <div class="cs-row">
         <select id="cs-status" aria-label="狀態">${Object.entries(data.CASE_STATUS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
-        <select id="cs-project" aria-label="專案"></select>
+        <select id="cs-ptag" aria-label="專案標籤"></select>
         <select id="cs-type" aria-label="工作種類"></select>
+        <select id="cs-project" aria-label="專案" hidden></select>
         <select id="cs-sort" aria-label="排序">
           <option value="recent">最近有動靜</option><option value="case">案件編號（新到舊）</option><option value="created">建立日期（新到舊）</option>
         </select>
@@ -32,7 +33,7 @@ export function mountCases(box) {
     <section class="card cs-merge" id="cs-merge" hidden></section>
     <p class="sub cs-count" id="cs-count"></p>
     <div class="table-wrap"><table class="table cs-table">
-      <thead><tr><th>案件</th><th>工作</th><th>狀態</th><th>種類／專案</th><th>最近</th><th>進度</th></tr></thead>
+      <thead><tr><th>案件</th><th>工作</th><th>狀態</th><th>種類／專案標籤</th><th>最近</th><th>進度</th></tr></thead>
       <tbody id="cs-body"></tbody></table></div>
     <div class="dialog-actions cs-more"><button type="button" class="btn-ghost" id="cs-more" hidden>顯示更多</button></div>`;
 
@@ -40,6 +41,7 @@ export function mountCases(box) {
   $('#cs-q', box).addEventListener('input', (e) => set({ q: e.target.value }));
   $('#cs-status', box).onchange = (e) => set({ status: e.target.value });
   $('#cs-project', box).onchange = (e) => set({ projectId: e.target.value });
+  $('#cs-ptag', box).onchange = (e) => set({ projectTagId: e.target.value });
   $('#cs-type', box).onchange = (e) => set({ workTypeId: e.target.value });
   $('#cs-sort', box).onchange = (e) => set({ sort: e.target.value });
   $('#cs-more', box).onclick = () => { shown += PAGE; render(); };
@@ -60,17 +62,28 @@ export function mountCases(box) {
 
   let mergeGroups = [];
   function render() {
-    const rows = data.caseRows(state.tasks, state.areasById, state.memosByTask, state.projects, state.workTags);
-    const boardAreaIds = new Set(data.boardAreas(state.areas).map((a) => a.id));
+    // 20261106：專案標籤（work_tags kind='project'）也能搜尋、篩選；caseRows 的 project 是舊的 projects 專案
+    const rows = data.caseRows(state.tasks, state.areasById, state.memosByTask, state.projects, state.workTags).map((r) => {
+      const projectTag = state.workTags.find((w) => w.id === r.task.work_project_tag_id)?.label || '';
+      return projectTag ? { ...r, projectTag, search: `${r.search} ${projectTag.toLowerCase()}` } : r;
+    });
     $('#cs-status', box).value = f.status;
     $('#cs-sort', box).value = f.sort;
-    $('#cs-project', box).innerHTML = `<option value="">全部專案</option>${state.projects.filter((p) => boardAreaIds.has(p.area_id))
-      .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+    // 舊的「專案」篩選（projects）只在有工作案件掛著專案時出現；看板改用專案標籤
+    const usedProjects = new Set(rows.map((r) => r.task.project_id).filter(Boolean));
+    const projects = state.projects.filter((p) => usedProjects.has(p.id));
+    $('#cs-project', box).hidden = !projects.length;
+    if (!projects.length) f.projectId = '';
+    $('#cs-project', box).innerHTML = `<option value="">全部專案</option>${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
     $('#cs-project', box).value = f.projectId;
-    $('#cs-type', box).innerHTML = `<option value="">全部種類</option>${state.workTags.map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}`;
+    $('#cs-ptag', box).innerHTML = `<option value="">全部專案標籤</option>${workTagsOf('project', f.projectTagId).map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}`;
+    $('#cs-ptag', box).value = f.projectTagId;
+    if ($('#cs-ptag', box).value !== f.projectTagId) f.projectTagId = ''; // 標籤被刪掉了
+    $('#cs-type', box).innerHTML = `<option value="">全部種類</option>${workTagsOf('type', f.workTypeId).map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}`;
     $('#cs-type', box).value = f.workTypeId;
+    if ($('#cs-type', box).value !== f.workTypeId) f.workTypeId = '';
 
-    const list = data.filterCases(rows, f);
+    const list = data.filterCases(rows.filter((r) => !f.projectTagId || r.task.work_project_tag_id === f.projectTagId), f);
     $('#cs-count', box).textContent = `共 ${rows.length} 個案件，符合條件 ${list.length} 個`;
     $('#cs-body', box).innerHTML = list.length ? list.slice(0, shown).map((r) => {
       const t = r.task;
@@ -79,7 +92,7 @@ export function mountCases(box) {
         <td class="cs-no">${esc(t.case_no || '—')}</td>
         <td class="cs-title">${esc(t.title)}${link ? ` <a class="link-chip" href="${esc(link)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(linkLabel(link))}</a>` : ''}</td>
         <td><span class="cs-st st-${t.status}">${statusLabel(t)}</span></td>
-        <td class="cs-tags">${esc([r.workType, r.project].filter(Boolean).join('・') || '—')}</td>
+        <td class="cs-tags">${esc([r.workType, r.projectTag && `#${r.projectTag}`, r.project].filter(Boolean).join('・') || '—')}</td>
         <td>${formatShort(r.lastDay)}</td>
         <td>${r.memoCount ? `${r.memoCount} 則` : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="6" class="empty">沒有符合條件的案件。換個條件，或清空搜尋。</td></tr>';
@@ -125,10 +138,11 @@ export async function openCase(taskId) {
   const memos = state.memosByTask[t.id] || [];
   const project = state.projects.find((p) => p.id === t.project_id)?.name;
   const workType = state.workTags.find((w) => w.id === t.work_type_id)?.label;
+  const projectTag = state.workTags.find((w) => w.id === t.work_project_tag_id)?.label;
   const due = data.taskDay(t);
   const total = entries.reduce((n, e) => n + data.entrySeconds(e), 0);
   const facts = [
-    ['狀態', statusLabel(t)], ['工作種類', workType], ['專案', project], ['建立', formatDateTime(t.created_at)],
+    ['狀態', statusLabel(t)], ['工作種類', workType], ['專案標籤', projectTag], ['專案', project], ['建立', formatDateTime(t.created_at)],
     ['預定', due && formatShort(due)], ['完成', t.completed_at && formatDateTime(t.completed_at)], ['累計用時', total ? formatHMS(total) : null],
   ].filter(([, v]) => v);
   dlg.innerHTML = `

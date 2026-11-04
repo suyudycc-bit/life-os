@@ -4,11 +4,10 @@
 import * as config from '../config.js';
 import * as data from '../data.js';
 import { state, refreshTasks, refreshAreas } from '../store.js';
-import { $, esc, toast, linkLabel, pastedLink } from '../ui.js';
+import { $, esc, toast, linkLabel, pastedLink, confirmDialog } from '../ui.js';
 import { today, formatShort, formatHMS } from '../dates.js';
-import { openTaskEditor, openMemoDialog, startTimer } from './task-actions.js';
+import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags } from './task-actions.js';
 import { openAreaDialog } from './area-dialog.js';
-import { openWrapUp } from './wrapup-dialog.js';
 import { mountCases, openPhrases } from './cases.js';
 
 const BOARD_URL = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(config.WORK_BOARD_URL || '')
@@ -132,118 +131,6 @@ async function copyReport(day = today(), { quiet = false } = {}) {
   }
 }
 
-// ===== W5 每日回報：預覽、複製表格、下載圖片、開啟郵件（不自動寄，使用者決定 2026-11-02）=====
-// 截圖套件同舊看板：html2canvas 1.4.1，cdnjs，SRI 取自 cdnjs API（2026-11-03 查證）
-const H2C_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-const H2C_SRI = 'sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoeqMV/TJlSKda6FXzoEyYGjTe+vXA==';
-let h2cLoading = null;
-function loadHtml2canvas() {
-  if (window.html2canvas) return Promise.resolve(window.html2canvas);
-  h2cLoading ||= new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = H2C_SRC;
-    s.integrity = H2C_SRI;
-    s.crossOrigin = 'anonymous';
-    s.referrerPolicy = 'no-referrer';
-    s.onload = () => (window.html2canvas ? resolve(window.html2canvas) : reject(new Error('圖片元件載入失敗')));
-    s.onerror = () => { h2cLoading = null; reject(new Error('圖片元件載入失敗，請檢查網路')); };
-    document.head.appendChild(s);
-  });
-  return h2cLoading;
-}
-
-/** 把回報表格畫成 PNG（Blob）；表格放在畫面外的白底容器 */
-export async function reportImage(html) {
-  const html2canvas = await loadHtml2canvas();
-  const holder = document.createElement('div');
-  holder.style.cssText = 'position:fixed;left:0;top:-99999px;background:#fff;padding:10px;';
-  holder.innerHTML = html;
-  document.body.appendChild(holder);
-  try {
-    const canvas = await html2canvas(holder, { backgroundColor: '#ffffff', scale: 2, logging: false });
-    return await new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('圖片產生失敗'))), 'image/png'));
-  } finally {
-    holder.remove();
-  }
-}
-
-// 回報人名與收件人只是這台裝置的方便設定（不進資料庫）
-const MAIL_KEY = 'lifeos-wb-mail';
-const readMail = () => { try { return { name: '', to: '', ...JSON.parse(localStorage.getItem(MAIL_KEY) || '{}') }; } catch { return { name: '', to: '' }; } };
-const dotDay = (d) => d.replaceAll('-', '.');
-
-function openReportDialog(day = today()) {
-  const dlg = $('#report-dialog');
-  const mail = readMail();
-  const { html, count } = dailyReport(day);
-  const subject = `${dotDay(day)} 每日工作回報`;
-  dlg.innerHTML = `
-    <div class="digest rp">
-      <div class="day-head"><h2>每日工作回報・${formatShort(day)}</h2><span class="sub" role="status" id="rp-status"></span></div>
-      <p class="sub">不會自動寄出。可以複製表格貼到 Teams／信件、下載成圖片，或開啟郵件程式後自己按送出。今天新接、進行中還沒完成的工作會自動列入「明天預計處理項目」。</p>
-      <div class="row rp-fields">
-        <label>回報人名<input name="name" value="${esc(mail.name)}" maxlength="40" autocomplete="name"></label>
-        <label>收件人<input name="to" type="email" value="${esc(mail.to)}" maxlength="254" placeholder="選填，可在郵件程式再填" autocomplete="email"></label>
-      </div>
-      <p class="rp-subject"><b>主旨</b><span>${esc(subject)}</span><button type="button" class="btn-ghost" data-rp="subject">複製主旨</button></p>
-      <div class="rp-preview" aria-label="回報表格預覽">${count ? html : '<p class="empty">今天的看板是空的。</p>'}</div>
-      <div class="dialog-actions rp-actions">
-        <button type="button" class="btn-ghost" data-close>關閉</button>
-        <button type="button" class="btn-timer" data-rp="image" ${count ? '' : 'disabled'}>下載圖片</button>
-        <button type="button" class="btn-timer" data-rp="mail" ${count ? '' : 'disabled'}>開啟郵件程式</button>
-        <button type="button" class="btn-primary" data-rp="copy" ${count ? '' : 'disabled'}>複製表格</button>
-      </div>
-    </div>`;
-  const status = $('#rp-status', dlg);
-  const field = (n) => dlg.querySelector(`input[name=${n}]`);
-  const save = () => {
-    try { localStorage.setItem(MAIL_KEY, JSON.stringify({ name: field('name').value.trim(), to: field('to').value.trim() })); } catch { /* 忽略 */ }
-  };
-  dlg.oninput = save;
-  dlg.onclick = async (e) => {
-    if (e.target.closest('[data-close]')) { dlg.close(); return; }
-    const b = e.target.closest('[data-rp]');
-    if (!b) return;
-    const act = b.dataset.rp;
-    if (act === 'subject') {
-      try { await navigator.clipboard.writeText(subject); toast('已複製主旨'); } catch { toast('複製失敗，請手動選取主旨', true); }
-    }
-    if (act === 'copy') await copyReport(day);
-    if (act === 'image') {
-      b.disabled = true;
-      status.textContent = '產生圖片中…';
-      try {
-        const blob = await reportImage(dailyReport(day).html);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `工作報告_${day}.png`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        status.textContent = '';
-        toast('圖片已下載，可直接拖曳貼到 Teams');
-      } catch (err) {
-        status.textContent = '';
-        toast(`${err.message}，請改用複製表格`, true);
-      } finally { b.disabled = false; }
-    }
-    if (act === 'mail') {
-      // mailto 只能帶純文字：先把表格複製起來，信件內文貼上即可
-      save();
-      const name = field('name').value.trim();
-      const to = field('to').value.trim();
-      if (to && !field('to').checkValidity()) { toast('收件人信箱格式不對', true); field('to').focus(); return; }
-      await copyReport(day, { quiet: true });
-      const bodyText = `${dotDay(day)} ${name ? `${name} ` : ''}每日回報\n\n`;
-      location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText)}`;
-      toast('已開啟郵件程式，表格已複製，在內文貼上即可');
-    }
-  };
-  dlg.showModal();
-}
-
 function legacyHTML() {
   return BOARD_URL ? `
     <div class="wb-frame">
@@ -266,13 +153,11 @@ export function mountWorkBoard(root) {
       <div><h1>工作看板</h1><p class="sub" id="wb-date"></p></div>
       <div class="cal-tools">
         <div class="seg" role="group" aria-label="切換看板">
-          <button type="button" data-mode="board">Life OS 看板</button>
+          <button type="button" data-mode="board">TY工作看板</button>
           <button type="button" data-mode="cases">案件總覽</button>
           ${BOARD_URL ? '<button type="button" data-mode="legacy">舊看板</button>' : ''}
         </div>
         <button type="button" class="btn-primary" id="wb-copy">複製每日工作回報</button>
-        <button type="button" class="btn-timer" id="wb-report">回報・圖片・郵件</button>
-        <button type="button" class="btn-timer" id="wb-wrap">Wrap up my day</button>
         <button type="button" class="btn-timer" id="wb-phrases">常用詞組</button>
         <button type="button" class="btn-timer" id="wb-settings">列入設定</button>
         ${BOARD_URL ? `<a class="btn-timer" href="${esc(BOARD_URL)}" target="_blank" rel="noopener">舊看板 ↗</a>` : ''}
@@ -283,8 +168,6 @@ export function mountWorkBoard(root) {
   const body = $('#wb-body', root);
   $('#wb-settings', root).onclick = () => openBoardSettings();
   $('#wb-copy', root).onclick = () => copyReport();
-  $('#wb-report', root).onclick = () => openReportDialog();
-  $('#wb-wrap', root).onclick = () => openWrapUp();
   $('#wb-phrases', root).onclick = () => openPhrases();
   $('.seg', root).addEventListener('click', (e) => {
     const b = e.target.closest('[data-mode]');
@@ -369,7 +252,19 @@ export function mountWorkBoard(root) {
       } else startTimer(t);
     }
     if (b.dataset.act === 'done') await moveTo(t.id, 'done');
+    if (b.dataset.act === 'delete') await deleteCard(t);
   });
+
+  // 20261106 W4：卡片可刪除（進垃圾桶，30 天內可在「數據與備份」還原）
+  async function deleteCard(t) {
+    if (state.running?.task_id === t.id) { toast('這件工作正在計時，請先暫停再刪除', true); return; }
+    if (!(await confirmDialog(`刪除「${t.case_no ? `${t.case_no} ` : ''}${t.title}」？會移到垃圾桶，30 天內可在「數據與備份」還原。`))) return;
+    try {
+      await data.deleteTask(t.id);
+      await refreshTasks();
+      toast('已移到垃圾桶，可在「數據與備份」還原');
+    } catch (err) { toast(err.message, true); }
+  }
 
   // 手機（卡片不能拖，避免擋住左右滑動）：用「移到…」選單換欄
   body.addEventListener('change', async (e) => {
@@ -413,9 +308,10 @@ export function mountWorkBoard(root) {
     let links = [];
     try { links = data.parseLinks(f.link.value); } catch (err) { toast(err.message, true); return; }
     try {
+      // 工作種類、專案標籤可選既有的或直接打新名稱（存檔時找同名或建立；專案標籤不建立 projects 的專案）
+      const tags = await resolveWorkTags({ type: f.work_type.value, project: f.work_project_tag.value });
       await data.createWorkTask({
-        title: f.title.value, area_id: area.id, work_type_id: f.work_type_id.value || null,
-        project_id: f.project_id.value || null, due_date: f.due_date.value || null, links,
+        title: f.title.value, area_id: area.id, ...tags, due_date: f.due_date.value || null, links,
       }, state.tasks);
       await refreshTasks();
       toast('已新增工作');
@@ -427,7 +323,8 @@ export function mountWorkBoard(root) {
 
   function cardHTML(t, col, day) {
     const tag = state.workTags.find((w) => w.id === t.work_type_id);
-    const project = state.projects.find((p) => p.id === t.project_id);
+    const ptag = state.workTags.find((w) => w.id === t.work_project_tag_id);
+    const project = state.projects.find((p) => p.id === t.project_id); // 舊資料掛的 projects 專案照樣顯示
     const due = data.taskDay(t);
     const late = due && due < day && t.status !== 'done';
     const memo = (state.memosByTask[t.id] || [])[0];
@@ -443,9 +340,10 @@ export function mountWorkBoard(root) {
           ${t.starred ? '<span class="wb-star" title="星標">★</span>' : ''}
         </div>
         <button type="button" class="wb-title" data-act="edit" title="編輯工作">${esc(t.title)}</button>
-        ${tag || project ? `<div class="wb-tags">
-          ${tag ? `<span class="chip" style="--c:${esc(tag.color)}"><i></i>${esc(tag.label)}</span>` : ''}
-          ${project ? `<span class="wb-project">📁 ${esc(project.name)}</span>` : ''}</div>` : ''}
+        ${tag || ptag || project ? `<div class="wb-tags">
+          ${tag ? `<span class="chip" style="--c:${esc(tag.color)}" title="工作種類"><i></i>${esc(tag.label)}</span>` : ''}
+          ${ptag ? `<span class="wb-ptag" title="專案標籤">#${esc(ptag.label)}</span>` : ''}
+          ${project ? `<span class="wb-project" title="專案">📁 ${esc(project.name)}</span>` : ''}</div>` : ''}
         ${memo ? `<p class="wb-memo" title="最新進度"><b>進度</b>${esc(memo.body)}</p>` : ''}
         ${links.length ? `<div class="wb-links">${links.map((u) => `<a class="link-chip" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">🔗 ${esc(linkLabel(u))}</a>`).join('')}</div>` : ''}
         <div class="wb-actions">
@@ -454,6 +352,7 @@ export function mountWorkBoard(root) {
           <span class="wb-gap"></span>
           <button type="button" class="btn-ghost btn-memo" data-act="memo" title="進度紀錄">進度${memoCount ? `<span class="count">${memoCount}</span>` : ''}</button>
           ${t.status !== 'done' ? '<button type="button" class="btn-ghost" data-act="done" title="標成完成">✓</button>' : ''}
+          <button type="button" class="btn-ghost wb-del" data-act="delete" title="刪除工作（移到垃圾桶）" aria-label="刪除工作">✕</button>
         </div>
         <select class="wb-move" aria-label="移到其他欄">
           <option value="">移到…</option>
@@ -464,17 +363,16 @@ export function mountWorkBoard(root) {
 
   function addFormHTML() {
     const areas = data.boardAreas(state.areas);
-    const ids = new Set(areas.map((a) => a.id));
-    const projects = state.projects.filter((p) => ids.has(p.area_id) && p.status !== 'done');
+    const options = (kind) => workTagsOf(kind).map((w) => `<option value="${esc(w.label)}"></option>`).join('');
     return `
       <form class="wb-add">
         <input name="title" placeholder="新接一件工作…" aria-label="工作內容" required maxlength="300">
         ${areas.length > 1 ? `<select name="area_id" aria-label="領域">${areas.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select>` : ''}
         <div class="wb-add-row">
-          <select name="work_type_id" aria-label="工作種類"><option value="">工作種類</option>
-            ${state.workTags.filter((w) => w.active).map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}</select>
-          <select name="project_id" aria-label="專案"><option value="">專案</option>
-            ${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select>
+          <input name="work_type" list="wb-dl-type" placeholder="工作種類" aria-label="工作種類（可選或輸入新的）" maxlength="40" autocomplete="off">
+          <input name="work_project_tag" list="wb-dl-ptag" placeholder="專案標籤" aria-label="專案標籤（可選或輸入新的）" maxlength="40" autocomplete="off">
+          <datalist id="wb-dl-type">${options('type')}</datalist>
+          <datalist id="wb-dl-ptag">${options('project')}</datalist>
         </div>
         <label class="wb-add-due">預定處理日<input type="date" name="due_date"></label>
         <div class="wb-add-row"><input name="link" placeholder="連結（選填）" aria-label="連結"><button class="btn-primary">新增</button></div>

@@ -85,3 +85,25 @@ export function pastedLink(clipboardData) {
   if (!m) return null;
   return { text: plain.replace(m[0], ' ').replace(/\s+/g, ' ').trim(), url: m[0] };
 }
+
+/**
+ * 側欄徽章（20261106 E）：ROUTES 裡有 `badge: true` 的頁面，側欄會有 <span class="badge" data-badge="頁面id">。
+ * 任何模組都可呼叫 setNavBadge('inbox', 3, '3 筆放很久沒看')；n 為 0／空值時隱藏。
+ * 所在分組收合時，分組小標旁顯示組內徽章的合計（app.js 的 renderNav）。
+ */
+export function setNavBadge(routeId, n, label = '') {
+  const b = document.querySelector(`#nav [data-badge="${CSS.escape(routeId)}"]`);
+  if (!b) return;
+  const num = Number(n) || 0;
+  b.textContent = num;
+  b.hidden = num === 0;
+  b.dataset.n = num;
+  if (label || num) b.setAttribute('aria-label', label || `${num} 筆`);
+  const sec = b.closest('.nav-sec');
+  const sum = sec?.querySelector('.nav-group-badge');
+  if (sum) {
+    const total = [...sec.querySelectorAll('[data-badge]')].reduce((a, x) => a + (Number(x.dataset.n) || 0), 0);
+    sum.textContent = total;
+    sum.hidden = total === 0;
+  }
+}

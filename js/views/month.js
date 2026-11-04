@@ -6,6 +6,7 @@ import { state, refreshTasks, refreshProjects } from '../store.js';
 import { $, esc, toast, confirmDialog, areaChip } from '../ui.js';
 import { today, formatShort, formatTime, formatHMS } from '../dates.js';
 import { openTaskEditor } from './task-actions.js';
+import { projectOptions, goalProjectTag } from './projects.js';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const SAVE_DELAY = 800; // 月回顧：停止輸入多久後自動儲存（毫秒）
@@ -125,8 +126,11 @@ export function mountMonth(root) {
           <label>領域<select name="area_id">${state.areas.map((a) => `<option value="${a.id}" ${a.id === v.area_id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>
           <label>期限（可留白）<input type="date" name="due_date" value="${v.due_date || ''}"></label>
         </div>
-        <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-        <p class="sub">月目標和「專案與目標」是同一份；任務的「編輯」裡可以掛上這個目標，進度就會跟著算。</p>
+        <div class="row">
+          <label>所屬專案<select name="project_id">${projectOptions(v.project_id || '', { none: '不掛專案' })}</select></label>
+          <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        </div>
+        <p class="sub">月目標和「專案與目標」是同一份；掛了專案會出現在那張專案卡片。任務的「編輯」裡可以掛上這個目標，進度就會跟著算。</p>
         <div class="dialog-actions">
           ${g ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
           <button type="button" class="btn-ghost" data-cancel>取消</button>
@@ -134,6 +138,10 @@ export function mountMonth(root) {
         </div>
       </form>`;
     const f = $('form', dlg);
+    f.project_id.onchange = () => {
+      const p = state.projects.find((x) => x.id === f.project_id.value);
+      if (p) f.area_id.value = p.area_id;
+    };
     $('[data-cancel]', dlg).onclick = () => dlg.close();
     const del = $('[data-del]', dlg);
     if (del) {
@@ -146,8 +154,8 @@ export function mountMonth(root) {
       e.preventDefault();
       const fd = new FormData(f);
       try {
-        await data.saveGoal({ id: g?.id, title: fd.get('title'), area_id: fd.get('area_id'), due_date: fd.get('due_date'),
-          status: fd.get('status'), period: g ? g.period : ui.month });
+        await data.projectSaveGoal({ id: g?.id, title: fd.get('title'), area_id: fd.get('area_id'), due_date: fd.get('due_date'),
+          status: fd.get('status'), period: g ? g.period : ui.month, project_id: fd.get('project_id') || null });
         dlg.close();
         await refreshProjects();
         toast(g ? '已更新' : '已新增月目標');
@@ -335,7 +343,7 @@ export function mountMonth(root) {
         <input type="checkbox" class="task-done mo-goal-done" ${g.status === 'done' ? 'checked' : ''} ${g.status === 'dropped' ? 'disabled' : ''} aria-label="標記達成：${esc(g.title)}">
         <button type="button" class="goal-row mo-goal-edit">
           <span class="goal-title ${g.status === 'done' ? 'is-done' : ''}">${esc(g.title)}</span>
-          ${areaChip(state.areasById[g.area_id])}
+          ${areaChip(state.areasById[g.area_id])}${goalProjectTag(g)}
           ${g.status === 'dropped' ? '<span class="sub">放棄</span>' : ''}
           ${progressHTML(data.progressOf(state.tasks, 'goal_id', g.id))}
         </button></li>`).join('')

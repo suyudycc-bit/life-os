@@ -10,6 +10,7 @@ import { today, formatShort, localDate } from '../dates.js';
 import { taskItemHTML } from './task-item.js';
 import { bindTaskList } from './task-actions.js';
 import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js';
+import { saveInboxFilter } from './inbox.js';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
@@ -28,6 +29,7 @@ export function mountOverview(root) {
       <span>第一次使用？<a href="#/guide">看使用說明</a>，跟著走一遍「建任務 → 計時 → 完成 → 看統計與復盤」。</span>
       <button type="button" class="btn-ghost" id="ov-guide-close" aria-label="關閉使用說明提示">✕</button>
     </aside>
+    <a class="ov-inbox" id="ov-inbox" href="#/inbox" hidden></a>
     <section class="stats">
       <div class="card stat">
         <div class="stat-label">今日任務完成率</div>
@@ -63,6 +65,10 @@ export function mountOverview(root) {
     <section class="card ov-media" id="ov-media" hidden>
       <div class="day-head"><h2>正在讀／看</h2><a class="sub" href="#/media" data-media-doing>書影單 ›</a></div>
       <ul class="ovm-list" id="ov-media-list"></ul>
+    </section>
+    <section class="card ov-follow" id="ov-follow" hidden>
+      <div class="day-head"><h2 id="ov-follow-title">今天該跟進</h2><a class="sub" href="#/contacts">跟進對象 ›</a></div>
+      <ul class="ovf-list" id="ov-follow-list"></ul>
     </section>
     <div class="grid-2 ov-row2">
       <section class="card">
@@ -124,6 +130,27 @@ export function mountOverview(root) {
   $('#ov-media', root).addEventListener('click', (e) => {
     if (e.target.closest('[data-media-doing]')) saveMediaFilter({ status: 'doing', kind: '' });
   });
+  // 今天該跟進（跟進對象，20261106）：沒有人或讀取失敗（例如還沒執行 migration）就整塊不顯示；不在這裡建立預設階段
+  Promise.all([data.listContactStages(), data.listContacts()]).then(([stages, contacts]) => {
+    const follow = data.contactsToFollow(contacts, stages, today());
+    const sec = $('#ov-follow', root);
+    if (!sec || !follow.length) return;
+    const byId = Object.fromEntries(stages.map((s) => [s.id, s]));
+    $('#ov-follow-title', root).textContent = `今天該跟進：${follow.length} 人`;
+    $('#ov-follow-list', root).innerHTML = follow.slice(0, 5).map((f) => `
+      <li class="ovf-${f.reason}"><a href="#/contacts"><b>${esc(f.contact.name)}</b><span class="sub">${esc(data.contactFollowReason(f, byId))}</span></a></li>`).join('')
+      + (follow.length > 5 ? `<li class="sub">還有 ${follow.length - 5} 人</li>` : '');
+    sec.hidden = false;
+  }).catch(() => {});
+  // 收件匣提醒（20261106）：放超過 7 天還沒點開的；0 則不顯示，讀取失敗（例如還沒執行 migration）也不顯示
+  data.listInbox().then((items) => {
+    const n = data.staleInbox(items).length;
+    const a = $('#ov-inbox', root);
+    if (!a || !n) return;
+    a.innerHTML = `<span class="ov-inbox-mark" aria-hidden="true">${n}</span><span>收件匣：${n} 則放超過 ${data.INBOX_STALE_DAYS} 天還沒看</span><span class="sub">去看看 ›</span>`;
+    a.hidden = false;
+  }).catch(() => {});
+  $('#ov-inbox', root).addEventListener('click', () => saveInboxFilter({ tab: 'unread', source: '', cat: '' }));
   const noteForm = $('#ov-note', root);
   noteForm.onsubmit = async (e) => {
     e.preventDefault();

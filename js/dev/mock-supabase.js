@@ -19,15 +19,15 @@ const taipeiDate = (ts) => new Date(new Date(ts).getTime() + TZ_OFFSET_MS).toISO
 const DEFAULTS = {
   areas: () => ({ sort: 0, color: null, on_board: false }),
   notes: () => ({ area_id: null, body: null, category: null, tags: [], updated_at: now() }),
-  habits: () => ({ area_id: null, target_per_week: 7, archived: false }),
+  habits: () => ({ area_id: null, target_per_week: 7, archived: false, project_id: null, goal_id: null }), // 20261106
   projects: () => ({ status: 'active', next_action: null, notes: null, updated_at: now(), start_date: null, end_date: null }),
-  goals: () => ({ due_date: null, status: 'active', period: null }), // period：migration 20261105
+  goals: () => ({ due_date: null, status: 'active', period: null, project_id: null }), // period：20261105；project_id：20261106
   tasks: () => ({
     status: 'todo', priority: 2, starred: false, actual_min: 0, completed_at: null, notes: null,
     project_id: null, goal_id: null, due_date: null, scheduled_start: null, estimate_min: null, updated_at: now(),
-    sort_order: null, links: [], actual_sec: 0, case_no: null, work_type_id: null,
+    sort_order: null, links: [], actual_sec: 0, case_no: null, work_type_id: null, board_parked: false, work_project_tag_id: null,
   }),
-  work_tags: () => ({ color: '#667085', active: true, sort: 0 }), // migration 20261104
+  work_tags: () => ({ color: '#667085', active: true, sort: 0, kind: 'type' }), // migration 20261104；kind：20261106
   routine_phrases: () => ({ sort: 0 }),
   daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {}, mood: null, energy: null }),
   // migration 20261105_journal（Phase J）
@@ -36,6 +36,13 @@ const DEFAULTS = {
   media_items: () => ({ creator: null, release_year: null, cover_url: null, link_url: null, status: 'want', rating: null, review: null,
     started_on: null, finished_on: null, tags: [], area_id: null, note_id: null, sort_order: null, updated_at: now() }),
   bucket_items: () => ({ category: null, area_id: null, done_on: null, note: null, sort_order: null }),
+  // migration 20261106_feedback
+  trash: () => ({ deleted_at: now() }),
+  inbox_items: () => ({ url: null, title: null, body: null, source: 'other', category: null, area_id: null, opened_at: null, done_at: null }),
+  contact_stages: () => ({ sort: 0, follow_days: null, color: null }),
+  contacts: () => ({ stage_id: null, phone: null, line_id: null, ig: null, source: null, interests: null, tags: [], next_follow_on: null,
+    last_contact_on: null, notes: null, archived: false, sort_order: null }),
+  contact_logs: () => ({ kind: null, content: null, next_step: null }),
 };
 
 function dailySummary(tasks, areas = []) {
@@ -99,6 +106,7 @@ class Query {
   eq(col, val) { this.filters.push((r) => r[col] === val); return this; }
   gte(col, val) { this.filters.push((r) => r[col] != null && r[col] >= val); return this; }
   is(col, val) { this.filters.push((r) => (r[col] ?? null) === val); return this; }
+  in(col, vals) { const set = new Set(vals); this.filters.push((r) => set.has(r[col])); return this; }
   lt(col, val) { this.filters.push((r) => r[col] != null && r[col] < val); return this; }
   lte(col, val) { this.filters.push((r) => r[col] != null && r[col] <= val); return this; }
   limit(n) { this.max = n; return this; }
@@ -132,16 +140,19 @@ class Query {
             }
           }
         }
-        // migration 20261104：tasks (user_id, case_no) 唯一（null 不限）、work_tags (user_id, label) 唯一
-        const uniq = { tasks: 'case_no', work_tags: 'label' }[this.table];
+        // migration 20261104：tasks (user_id, case_no) 唯一（null 不限）；20261106：work_tags 改成 (user_id, kind, label) 唯一
+        const uniq = { tasks: (x) => x.case_no, work_tags: (x) => `${x.kind || 'type'}|${x.label}` }[this.table];
         if (uniq) {
-          const seen = new Set(rows.filter((x) => x.user_id === uid && x[uniq] != null).map((x) => x[uniq]));
+          const seen = new Set(rows.filter((x) => x.user_id === uid).map(uniq).filter((v) => v != null));
           for (const r of out) {
-            if (r[uniq] == null) continue;
-            if (seen.has(r[uniq])) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.table}_${uniq}"` } };
-            seen.add(r[uniq]);
+            const k = uniq(r);
+            if (k == null) continue;
+            if (seen.has(k)) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.table}_unique"` } };
+            seen.add(k);
           }
         }
+        // 20261106：還原垃圾桶時帶原本的 id，主鍵重複要報錯
+        for (const r of out) if (rows.some((x) => x.id === r.id)) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.table}_pkey"` } };
         if (this.table === 'time_entries') {
           for (const r of out) {
             const err = checkEntry(r) || (r.ended_at == null && rows.some((x) => x.user_id === uid && x.ended_at == null)
@@ -180,6 +191,17 @@ class Query {
       }
       if (this.op === 'delete') {
         out = rows.filter(match);
+        if (this.table === 'areas') { // 20261106（E）：tasks／計時／專案／目標 on delete restrict，其餘 set null
+          const ids = new Set(out.map((r) => r.id));
+          for (const t of ['tasks', 'time_entries', 'projects', 'goals']) {
+            if ((db[t] || []).some((r) => ids.has(r.area_id))) {
+              return { data: null, error: { code: '23503', message: `update or delete on table "areas" violates foreign key constraint on table "${t}"` } };
+            }
+          }
+          for (const t of ['habits', 'notes', 'media_items', 'bucket_items', 'future_events', 'inbox_items']) {
+            for (const r of db[t] || []) if (ids.has(r.area_id)) r.area_id = null;
+          }
+        }
         db[this.table] = rows.filter((r) => !out.includes(r));
         if (this.table === 'tasks') { // task_memos on delete cascade；time_entries.task_id on delete set null
           const ids = new Set(out.map((r) => r.id));
@@ -187,10 +209,20 @@ class Query {
           for (const e of db.time_entries || []) if (ids.has(e.task_id)) e.task_id = null;
         }
         if (this.table === 'time_entries') rollup(db, out);
-        if (this.table === 'projects' || this.table === 'goals' || this.table === 'work_tags') { // tasks.project_id／goal_id／work_type_id on delete set null
-          const key = { projects: 'project_id', goals: 'goal_id', work_tags: 'work_type_id' }[this.table];
+        // on delete set null（20261106：goals／habits 掛專案、habits 掛目標、看板專案標籤、跟進階段）
+        const SET_NULL = {
+          projects: [['tasks', 'project_id'], ['goals', 'project_id'], ['habits', 'project_id']],
+          goals: [['tasks', 'goal_id'], ['habits', 'goal_id']],
+          work_tags: [['tasks', 'work_type_id'], ['tasks', 'work_project_tag_id']],
+          contact_stages: [['contacts', 'stage_id']],
+        }[this.table];
+        if (SET_NULL) {
           const ids = new Set(out.map((r) => r.id));
-          for (const t of db.tasks) if (ids.has(t[key])) t[key] = null;
+          for (const [t, col] of SET_NULL) for (const r of db[t] || []) if (ids.has(r[col])) r[col] = null;
+        }
+        if (this.table === 'contacts') { // contact_logs on delete cascade
+          const ids = new Set(out.map((r) => r.id));
+          db.contact_logs = (db.contact_logs || []).filter((l) => !ids.has(l.contact_id));
         }
         if (this.table === 'habits') { // habit_logs on delete cascade
           const ids = new Set(out.map((r) => r.id));

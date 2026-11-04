@@ -6,7 +6,7 @@ import * as data from '../data.js';
 import { state, refreshProjects } from '../store.js';
 import { $, esc, toast, confirmDialog, areaChip } from '../ui.js';
 import { today, formatShort } from '../dates.js';
-import { openGoalDialog } from './projects.js';
+import { openGoalDialog, projectOptions, goalProjectTag } from './projects.js';
 import { openTaskEditor } from './task-actions.js';
 
 const SAVE_DELAY = 800; // 回顧停止輸入多久後自動儲存（同每日復盤）
@@ -87,6 +87,7 @@ export function mountYear(root) {
       <form class="yr-add" data-period="${period}">
         <input name="title" required maxlength="120" placeholder="新增目標" aria-label="新增${esc(data.periodLabel(period))}的目標">
         <select name="area_id" aria-label="領域">${areaOptions()}</select>
+        <select name="project_id" aria-label="所屬專案（可不掛）">${projectOptions('', { none: '不掛專案' })}</select>
         <button class="btn-timer">新增</button>
       </form>`;
     const reviewFields = (period, nextLabel) => `
@@ -212,7 +213,7 @@ export function mountYear(root) {
         aria-label="${done ? '取消達成' : '標成達成'}：${esc(g.title)}">
       <div class="yr-goal-main">
         <button type="button" class="yr-goal-t" data-goal-edit="${g.id}" title="編輯目標">${esc(g.title)}</button>
-        <div class="yr-goal-meta">${areaChip(state.areasById[g.area_id])}
+        <div class="yr-goal-meta">${areaChip(state.areasById[g.area_id])}${goalProjectTag(g)}
           ${g.due_date ? `<span>期限 ${formatShort(g.due_date)}</span>` : ''}
           ${g.status === 'dropped' ? '<span>已放棄</span>' : ''}
           <span class="yr-pr" role="img" aria-label="任務完成 ${pr.done}／${pr.total}"><span class="progress-bar"><span style="width:${pr.pct}%"></span></span>
@@ -221,6 +222,8 @@ export function mountYear(root) {
   }
 
   function renderGoals() {
+    // 專案清單可能在別頁改過：新增表單的專案選單跟著更新（保留目前選的）
+    root.querySelectorAll('.yr-add [name=project_id]').forEach((sel) => { sel.innerHTML = projectOptions(sel.value, { none: '不掛專案' }); });
     root.querySelectorAll('[data-goals]').forEach((ul) => {
       const p = ul.dataset.goals;
       const goals = data.goalsOfPeriod(state.goals, p)
@@ -313,7 +316,7 @@ export function mountYear(root) {
     e.preventDefault();
     try {
       if (f.matches('.yr-add')) {
-        await data.saveGoal({ title: f.title.value, area_id: f.area_id.value, period: f.dataset.period, status: 'active' });
+        await data.projectSaveGoal({ title: f.title.value, area_id: f.area_id.value, period: f.dataset.period, status: 'active', project_id: f.project_id.value || null });
         f.title.value = '';
         await refreshProjects();
         toast('已新增目標');
@@ -330,6 +333,12 @@ export function mountYear(root) {
   });
 
   body.addEventListener('change', async (e) => {
+    // 新增目標時選了專案：領域跟著改成專案的領域
+    if (e.target.matches('.yr-add [name=project_id]')) {
+      const p = state.projects.find((x) => x.id === e.target.value);
+      if (p) e.target.form.area_id.value = p.area_id;
+      return;
+    }
     const cb = e.target.closest('[data-goal-done]');
     if (!cb) return;
     const g = state.goals.find((x) => x.id === cb.dataset.goalDone);

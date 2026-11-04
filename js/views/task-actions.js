@@ -115,9 +115,33 @@ export async function startTimer(task) {
   }, '開始計時');
 }
 
+// ===== 工作看板 20261106：工作種類與專案標籤（work_tags，kind='type'／'project'），可選既有的或直接打新名稱 =====
+const tagKind = (w) => w.kind || 'type';
+/** 某一類、還在用的標籤（keepId：目前任務正在用的，即使停用也列出） */
+export const workTagsOf = (kind, keepId = null) =>
+  state.workTags.filter((w) => tagKind(w) === kind && (w.active !== false || w.id === keepId));
+
+/**
+ * 把輸入的名稱換成 work_tags 的 id：留白＝null；同名的沿用，沒有就建立（data.ensureWorkTag）。
+ * 專案標籤只是看板上的標籤，不建立 projects 的專案（使用者決定 2026-11-06）。
+ */
+export async function resolveWorkTags({ type, project }) {
+  const t = await data.ensureWorkTag(type, 'type');
+  const p = await data.ensureWorkTag(project, 'project');
+  if ([t, p].some((x) => x && !state.workTags.some((w) => w.id === x.id))) {
+    state.workTags = await data.listWorkTags(); // 有新建的標籤：重讀，下一次重畫的選單就有它
+  }
+  return { work_type_id: t?.id || null, work_project_tag_id: p?.id || null };
+}
+
 export function openTaskEditor(task) {
   const dlg = $('#task-dialog');
   const form = $('form', dlg);
+  // 工作（列入工作看板的領域）或已有工作標籤的任務：顯示工作種類與專案標籤；專案選單只在已掛 projects 時保留
+  const isWork = data.isWorkTask(task, state.areasById) || !!task.work_type_id || !!task.work_project_tag_id;
+  const tagLabel = (id) => state.workTags.find((w) => w.id === id)?.label || '';
+  const tagOptions = (kind, keepId) => workTagsOf(kind, keepId).map((w) => `<option value="${esc(w.label)}"></option>`).join('');
+  const showProject = !isWork || !!task.project_id;
   form.innerHTML = `
     <h2>編輯任務${task.case_no ? ` <span class="wb-case">${esc(task.case_no)}</span>` : ''}</h2>
     <label>任務名稱<input name="title" required value="${esc(task.title)}"></label>
@@ -140,19 +164,21 @@ export function openTaskEditor(task) {
       </select></label>
     </div>
     <div class="row">
-      <label>專案<select name="project_id"><option value="">（無）</option>
+      ${showProject ? `<label>專案<select name="project_id"><option value="">（無）</option>
         ${state.projects.filter((p) => p.status !== 'done' || p.id === task.project_id)
           .map((p) => `<option value="${p.id}" ${p.id === task.project_id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-      </select></label>
+      </select></label>` : ''}
       <label>目標<select name="goal_id"><option value="">（無）</option>
         ${state.goals.filter((g) => g.status === 'active' || g.id === task.goal_id)
           .map((g) => `<option value="${g.id}" ${g.id === task.goal_id ? 'selected' : ''}>${esc(g.title)}</option>`).join('')}
       </select></label>
     </div>
-    ${state.workTags.length ? `<label>工作種類<select name="work_type_id"><option value="">（無）</option>
-      ${state.workTags.filter((w) => w.active || w.id === task.work_type_id)
-        .map((w) => `<option value="${w.id}" ${w.id === task.work_type_id ? 'selected' : ''}>${esc(w.label)}</option>`).join('')}
-    </select></label>` : ''}
+    ${isWork ? `<div class="row">
+      <label>工作種類<input name="work_type" list="te-dl-type" value="${esc(tagLabel(task.work_type_id))}" placeholder="可選或輸入新的" maxlength="40" autocomplete="off"></label>
+      <label>專案標籤<input name="work_project_tag" list="te-dl-ptag" value="${esc(tagLabel(task.work_project_tag_id))}" placeholder="可選或輸入新的" maxlength="40" autocomplete="off"></label>
+      <datalist id="te-dl-type">${tagOptions('type', task.work_type_id)}</datalist>
+      <datalist id="te-dl-ptag">${tagOptions('project', task.work_project_tag_id)}</datalist>
+    </div>` : ''}
     <label class="check"><input type="checkbox" name="starred" ${task.starred ? 'checked' : ''}> 星標（列入今日最重要的 3 件事）</label>
     <label>相關連結（一行一個）<textarea name="links" rows="2" placeholder="https://docs.google.com/...">${esc((task.links || []).join('\n'))}</textarea></label>
     <label>備註<textarea name="notes" rows="3">${esc(task.notes || '')}</textarea></label>
@@ -187,14 +213,16 @@ export function openTaskEditor(task) {
       estimate_min: f.get('estimate_min') === '' ? null : Number(f.get('estimate_min')),
       status: f.get('status'),
       starred: f.has('starred'),
-      project_id: f.get('project_id') || null,
       goal_id: f.get('goal_id') || null,
       notes: f.get('notes').trim() || null,
     };
-    if (f.has('work_type_id')) patch.work_type_id = f.get('work_type_id') || null;
+    if (f.has('project_id')) patch.project_id = f.get('project_id') || null;
     if (!patch.title) return toast('請輸入任務名稱', true);
     dlg.close();
-    run(() => data.updateTask(task.id, patch), '已儲存');
+    run(async () => {
+      if (f.has('work_type')) Object.assign(patch, await resolveWorkTags({ type: f.get('work_type'), project: f.get('work_project_tag') }));
+      await data.updateTask(task.id, patch);
+    }, '已儲存');
   };
   dlg.showModal();
   $('input[name=title]', form).focus();

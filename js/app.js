@@ -1,7 +1,8 @@
 import { supabase, isMock } from './supabase.js';
 import * as data from './data.js';
 import { state, loadAll, refreshTasks, subscribe, reset } from './store.js';
-import { $, esc, toast } from './ui.js';
+import { $, esc, toast, setNavBadge } from './ui.js';
+export { setNavBadge }; // 20261106：其他模組也可以從 ui.js 直接 import
 import { mountOverview } from './views/overview.js';
 import { mountTasks } from './views/tasks.js';
 import { mountStats } from './views/stats.js';
@@ -17,6 +18,9 @@ import { mountGuide } from './views/guide.js';
 import { mountMonth } from './views/month.js';
 import { mountBucket } from './views/bucket.js';
 import { mountYear } from './views/year.js';
+import { mountContacts } from './views/contacts.js';
+import { mountInbox } from './views/inbox.js';
+import { mountTags } from './views/tags.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -32,22 +36,30 @@ const ICONS = {
   year: '<path d="M4 4h16v16H4z"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
   stats: '<path d="M12 4a8 8 0 1 0 8 8h-8z"/><path d="M15 3.5A6 6 0 0 1 20.5 9H15z"/>',
   review: '<path d="M5 19.5 6 15 16.5 4.5a2 2 0 0 1 3 3L9 18z"/><path d="M14.5 6.5l3 3"/>',
+  // 收件匣：托盤＋往下的箭頭（分享進來）
+  inbox: '<path d="M4 13.5 6.5 5h11l2.5 8.5V19H4z"/><path d="M4 13.5h4.5l1 2h5l1-2H20M12 3.5v6.5M9.5 7.5 12 10l2.5-2.5"/>',
   notes: '<path d="M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3z"/><path d="M9.5 20h5"/>',
   media: '<path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/><path d="M15 9.5h2.5M15 12.5h2.5"/>',
   habits: '<path d="M4 18c3-7 6-9 8-9s3 2 3 4-1 3-2 3-2-1-1-3 3-5 8-7"/>',
   workboard: '<path d="M4 4h16v16H4zM9.5 4v16M14.5 4v16"/><path d="M6 7.5h2M11 7.5h2M16 7.5h2M6 10.5h2M16 10.5h2"/>',
+  // 跟進對象：一個人＋名單橫線
+  contacts: '<path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M3 20c.5-3.5 3-5.5 6-5.5s5.5 2 6 5.5"/><path d="M16 6h5M16 9.5h5M18 13h3"/>',
   month: '<path d="M5 4h14v16H5z"/><path d="M8 4v16"/><path d="M11 8.5h5M11 12h5M11 15.5h3"/>',
   bucket: '<path d="M6 4h12v16l-6-4-6 4z"/><path d="m9.5 9.5 2 2 3.5-3.5"/>',
+  // 標籤與分類：一張吊牌
+  tags: '<path d="M4 4h7l9 9-7 7-9-9z"/><path d="M8 8h.01"/>',
   backup: '<path d="M8 4v13M4.5 13.5 8 17l3.5-3.5M16 20V7M12.5 10.5 16 7l3.5 3.5"/>',
   guide: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z"/><path d="M9.7 9.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.6M12 16.6h.01"/>',
 };
-const icon = (id) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg>`;
+// 沒有專屬圖示的頁面用一個小方格（其他模組新增路由時不會壞掉）
+const icon = (id) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[id] || '<path d="M6 6h12v12H6z"/>'}</svg>`;
 
 const ROUTES = [
   // group：側欄分組（今天要做的 → 計畫 → 回顧 → 收藏 → 其他）
   { id: 'overview', label: '總覽', mount: mountOverview, group: '今天' },
   { id: 'tasks', label: '任務管理', mount: mountTasks, badge: true, group: '今天' },
   { id: 'workboard', label: '工作看板', mount: mountWorkBoard, group: '今天' },
+  { id: 'contacts', label: '跟進對象', mount: mountContacts, group: '今天' },
   { id: 'projects', label: '專案與目標', mount: mountProjects, group: '計畫' },
   { id: 'calendar', label: '日曆', mount: mountCalendar, group: '計畫' },
   { id: 'month', label: '月度手帳', mount: mountMonth, group: '計畫' },
@@ -55,33 +67,86 @@ const ROUTES = [
   { id: 'review', label: '每日復盤', mount: mountReview, group: '回顧' },
   { id: 'stats', label: '時間統計', mount: mountStats, group: '回顧' },
   { id: 'habits', label: '習慣養成', mount: mountHabits, group: '回顧' },
+  { id: 'inbox', label: '收件匣', mount: mountInbox, group: '收藏', badge: true },
   { id: 'notes', label: '靈感知識庫', mount: mountNotes, group: '收藏' },
   { id: 'media', label: '書影單', mount: mountMedia, group: '收藏' },
   { id: 'bucket', label: '想做清單', mount: mountBucket, group: '收藏' },
+  { id: 'tags', label: '標籤與分類', mount: mountTags, group: '其他' },
   { id: 'backup', label: '數據與備份', mount: mountBackup, group: '其他' },
   { id: 'guide', label: '使用說明', mount: mountGuide, group: '其他' },
 ];
 
 let unsubscribe = null;
 
+// ===== 側欄分組收合（20261106 E）=====
+// 分組依 ROUTES 的 group，照第一次出現的順序；同組的路由就算不相鄰也排在一起（其他模組新增路由不用管位置）。
+// 收合狀態記在這台裝置（localStorage），目前所在頁的分組一律展開；進入收合中的分組時自動展開並記住。
+const NAV_FOLD_KEY = 'lifeos-nav-folded';
+let navFolded = new Set();
+try { navFolded = new Set(JSON.parse(localStorage.getItem(NAV_FOLD_KEY) || '[]')); } catch { navFolded = new Set(); }
+let currentGroup = null;
+const saveFolded = () => { try { localStorage.setItem(NAV_FOLD_KEY, JSON.stringify([...navFolded])); } catch { /* 忽略 */ } };
+const groupOf = (r) => r.group || '其他';
+
 function renderNav() {
-  const nav = $('#nav');
-  nav.innerHTML = ROUTES.map((r, i) => `
-    ${r.group !== ROUTES[i - 1]?.group ? `<div class="nav-group" aria-hidden="true"><span>${r.group}</span></div>` : ''}
-    <a href="#/${r.id}" data-route="${r.id}" title="${r.label}">
-      <span class="ico">${icon(r.id)}</span><span class="nav-label">${r.label}</span>
-      ${r.badge ? '<span class="badge" id="nav-badge" hidden></span>' : ''}
-    </a>`).join('');
+  const groups = new Map();
+  for (const r of ROUTES) {
+    if (!groups.has(groupOf(r))) groups.set(groupOf(r), []);
+    groups.get(groupOf(r)).push(r);
+  }
+  $('#nav').innerHTML = [...groups].map(([g, routes], i) => `
+    <div class="nav-sec" data-group="${esc(g)}">
+      <button type="button" class="nav-group" aria-expanded="true" aria-controls="nav-g-${i}">
+        <span>${esc(g)}</span><span class="nav-group-badge" hidden></span>
+        <svg class="nav-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+      </button>
+      <div class="nav-items" id="nav-g-${i}"><div class="nav-items-in">${routes.map((r) => `
+        <a href="#/${r.id}" data-route="${r.id}" title="${esc(r.label)}">
+          <span class="ico">${icon(r.id)}</span><span class="nav-label">${esc(r.label)}</span>
+          ${r.badge ? `<span class="badge" data-badge="${r.id}" hidden></span>` : ''}
+        </a>`).join('')}</div></div>
+    </div>`).join('');
+  $('#nav').addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-group');
+    if (!btn) return;
+    const g = btn.closest('.nav-sec').dataset.group;
+    if (navFolded.has(g)) navFolded.delete(g);
+    else {
+      navFolded.add(g);
+      if (g === currentGroup) toast('這一組有目前的頁面，換到別組的頁面後就會收起');
+    }
+    saveFolded();
+    syncNavFold();
+  });
+}
+
+/** 依收合設定與目前頁面更新每一組的展開狀態 */
+function syncNavFold() {
+  document.querySelectorAll('#nav .nav-sec').forEach((sec) => {
+    const folded = navFolded.has(sec.dataset.group) && sec.dataset.group !== currentGroup;
+    if (sec.classList.contains('folded') !== folded) {
+      // 動畫期間才裁切內容（平常不裁，目前頁書籤的缺角才不會被切掉）
+      sec.classList.add('nav-anim');
+      clearTimeout(sec._anim);
+      sec._anim = setTimeout(() => sec.classList.remove('nav-anim'), 260);
+    }
+    sec.classList.toggle('folded', folded);
+    const btn = $('.nav-group', sec);
+    btn.setAttribute('aria-expanded', String(!folded));
+    btn.title = `${folded ? '展開' : '收合'}「${sec.dataset.group}」`;
+  });
 }
 
 function updateBadge() {
-  const b = $('#nav-badge');
-  if (!b) return;
   const n = data.openCount(state.life.tasks); // 工作的數量在工作看板，不算在任務管理
-  b.textContent = n;
-  b.hidden = n === 0;
-  b.setAttribute('aria-label', `${n} 件未完成`);
+  setNavBadge('tasks', n, `${n} 件未完成`);
 }
+
+/** 收件匣徽章：放超過 7 天還沒點開的筆數（inbox_items 不在 store，登入後、換頁、收件匣有變動時重算） */
+function updateInboxBadge() {
+  data.inboxStaleCount().then((n) => setNavBadge('inbox', n, `${n} 則放很久沒看`)).catch(() => {});
+}
+window.addEventListener('lifeos:inbox-changed', updateInboxBadge);
 
 /** 側欄的計時中提示：任何頁面都看得到、可直接暫停 */
 function updateRunningBar() {
@@ -120,9 +185,14 @@ function route() {
   // 「#/頁面/參數」只取第一段當頁面（例如 #/month/2026-10），參數由該頁自己讀 location.hash
   const id = location.hash.replace('#/', '').split('/')[0] || 'overview';
   const r = ROUTES.find((x) => x.id === id) || ROUTES[0];
+  updateInboxBadge(); // 換頁時順便更新（例如在收件匣以外的地方點開過）
   document.querySelectorAll('#nav a').forEach((a) => {
     a.toggleAttribute('aria-current', a.dataset.route === r.id);
   });
+  // 目前頁面的分組一定展開；原本收合的就記成展開（使用者正在用這一組）
+  currentGroup = groupOf(r);
+  if (navFolded.delete(currentGroup)) saveFolded();
+  syncNavFold();
   const main = $('#main');
   unsubscribe?.();
   if (r.mount) {
@@ -222,6 +292,7 @@ function handleSession(session) {
 }
 
 renderNav();
+syncNavFold();
 subscribe(updateBadge);
 subscribe(updateRunningBar);
 watchStatNumbers($('#main'));

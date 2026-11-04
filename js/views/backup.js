@@ -45,6 +45,12 @@ export function mountBackup(root) {
       <label class="wb-target">放進哪個領域<select id="wb-area"></select></label>
       <label class="bk-file"><input type="file" id="wb-file" accept="application/json,.json"></label>
       <div id="wb-plan"></div>
+    </section>
+    <section class="card tr-sec" id="trash">
+      <div class="tr-head"><h2>垃圾桶</h2>
+        <label class="tr-filter">類型<select id="tr-kind"><option value="">全部</option></select></label></div>
+      <p class="sub">刪除的任務、專案、靈感等會先放在這裡 ${data.TRASH_DAYS} 天，可以還原（連同任務的進度 memo、習慣的打卡等一起回來）；超過 ${data.TRASH_DAYS} 天自動清除。領域刪除不進垃圾桶。</p>
+      <div id="tr-list"><p class="sub">讀取中…</p></div>
     </section>`;
 
   $('#bk-export', root).onclick = async (e) => {
@@ -155,6 +161,69 @@ export function mountBackup(root) {
       wbBox.innerHTML = `<p class="warn">無法匯入：${esc(err.message)}</p>`;
     }
   };
+
+  // ===== 垃圾桶（20261106 G2；資料函式在 data.js「垃圾桶」）=====
+  const trBox = $('#tr-list', root);
+  const trKind = $('#tr-kind', root);
+  let trash = [];
+  const daysLeft = (t) => Math.max(0, Math.ceil((Date.parse(t.deleted_at) + data.TRASH_DAYS * 86400000 - Date.now()) / 86400000));
+  function paintTrash() {
+    const kinds = [...new Set(trash.map((t) => t.table_name))];
+    const keep = trKind.value;
+    trKind.innerHTML = `<option value="">全部（${trash.length}）</option>${kinds.map((k) => `<option value="${esc(k)}">${esc(data.TRASH_LABELS[k] || k)}（${trash.filter((t) => t.table_name === k).length}）</option>`).join('')}`;
+    trKind.value = kinds.includes(keep) ? keep : '';
+    const list = trash.filter((t) => !trKind.value || t.table_name === trKind.value);
+    if (!list.length) {
+      trBox.innerHTML = `<p class="empty sub">${trash.length ? '這個類型沒有被刪除的資料。' : `垃圾桶是空的。刪除的資料會在這裡放 ${data.TRASH_DAYS} 天。`}</p>`;
+      return;
+    }
+    trBox.innerHTML = `<ul class="tr-list">${list.map((t) => {
+      const sub = Object.entries(t.payload?.cascade || {}).filter(([, rows]) => rows.length)
+        .map(([tb, rows]) => `${data.TRASH_LABELS[tb] || data.BACKUP_LABELS[tb] || tb} ${rows.length}`).join('、');
+      const left = daysLeft(t);
+      return `<li class="tr-item">
+        <span class="tr-kind">${esc(data.TRASH_LABELS[t.table_name] || t.table_name)}</span>
+        <span class="tr-main"><span class="tr-label">${esc(t.label)}</span>
+          <span class="sub tr-meta">刪除於 ${esc(stamp(new Date(t.deleted_at)).text)}${sub ? `・含 ${esc(sub)}` : ''}・<span class="${left <= 3 ? 'warn' : ''}">${left} 天後自動清除</span></span></span>
+        <span class="tr-acts">
+          <button type="button" class="btn-ghost" data-restore="${t.id}" aria-label="還原：${esc(t.label)}">還原</button>
+          <button type="button" class="btn-ghost danger" data-purge="${t.id}" aria-label="永久刪除：${esc(t.label)}">永久刪除</button>
+        </span></li>`;
+    }).join('')}</ul>`;
+  }
+  async function loadTrash() {
+    try {
+      trash = await data.listTrash();
+      paintTrash();
+    } catch (err) {
+      trBox.innerHTML = `<p class="warn">無法讀取垃圾桶：${esc(err.message)}</p><p class="sub">若還沒執行 migration 20261106_feedback.sql，垃圾桶尚未啟用。</p>`;
+    }
+  }
+  trKind.onchange = paintTrash;
+  trBox.addEventListener('click', async (e) => {
+    const b = e.target.closest('button[data-restore], button[data-purge]');
+    if (!b) return;
+    const t = trash.find((x) => x.id === (b.dataset.restore || b.dataset.purge));
+    if (!t) return;
+    const kind = data.TRASH_LABELS[t.table_name] || t.table_name;
+    b.disabled = true;
+    try {
+      if (b.dataset.restore) {
+        await data.restoreTrash(t.id);
+        await reloadAll(); // 還原後各頁（任務、專案、靈感…）看到的是同一份
+        toast(`已還原${kind}「${t.label}」`);
+      } else {
+        if (!(await confirmDialog(`永久刪除${kind}「${t.label}」？之後就不能還原了。`, '永久刪除'))) { b.disabled = false; return; }
+        await data.purgeTrashItem(t.id);
+        toast('已永久刪除');
+      }
+      await loadTrash();
+    } catch (err) {
+      b.disabled = false;
+      toast(err.message, true);
+    }
+  });
+  loadTrash();
 
   return () => {};
 }
