@@ -9,6 +9,14 @@ import { openExternalEvent, extTime } from './google-sync.js';
 import { today, formatShort, localDate } from '../dates.js';
 import { taskItemHTML } from './task-item.js';
 import { bindTaskList } from './task-actions.js';
+import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js';
+
+// 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
+// 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
+const GUIDE_TIP_KEY = 'lifeos-guide-tip';
+let tipState = null;
+try { tipState = localStorage.getItem(GUIDE_TIP_KEY); } catch { /* 忽略 */ }
+const firstVisit = tipState == null;
 
 export function mountOverview(root) {
   root.innerHTML = `
@@ -16,6 +24,10 @@ export function mountOverview(root) {
       <h1>今天，也好好生活。</h1>
       <p class="sub" id="ov-date"></p>
     </header>
+    <aside class="guide-tip" id="ov-guide-tip" hidden>
+      <span>第一次使用？<a href="#/guide">看使用說明</a>，跟著走一遍「建任務 → 計時 → 完成 → 看統計與復盤」。</span>
+      <button type="button" class="btn-ghost" id="ov-guide-close" aria-label="關閉使用說明提示">✕</button>
+    </aside>
     <section class="stats">
       <div class="card stat">
         <div class="stat-label">今日任務完成率</div>
@@ -48,6 +60,10 @@ export function mountOverview(root) {
       <div class="day-head"><h2>各領域專案的下一步</h2><a class="sub" href="#/projects">專案與目標 ›</a></div>
       <div id="ov-projects"></div>
     </section>
+    <section class="card ov-media" id="ov-media" hidden>
+      <div class="day-head"><h2>正在讀／看</h2><a class="sub" href="#/media" data-media-doing>書影單 ›</a></div>
+      <ul class="ovm-list" id="ov-media-list"></ul>
+    </section>
     <div class="grid-2 ov-row2">
       <section class="card">
         <div class="day-head"><h2>近 7 天習慣打卡</h2><a class="sub" href="#/habits">管理習慣 ›</a></div>
@@ -65,6 +81,12 @@ export function mountOverview(root) {
         </form>
       </section>
     </div>`;
+  if (firstVisit) { try { localStorage.setItem(GUIDE_TIP_KEY, 'seen'); } catch { /* 忽略 */ } }
+  $('#ov-guide-close', root).onclick = () => {
+    tipState = 'dismissed';
+    try { localStorage.setItem(GUIDE_TIP_KEY, 'dismissed'); } catch { /* 忽略 */ }
+    $('#ov-guide-tip', root).hidden = true;
+  };
   bindTaskList($('#ov-top3', root));
   bindTaskList($('#ov-list', root));
   bindHabitDays($('#ov-habits', root));
@@ -87,6 +109,21 @@ export function mountOverview(root) {
     const ev = b && todayExt.find((x) => x.id === b.dataset.ext);
     if (ev) openExternalEvent(ev);
   });
+  // 書影單「進行中」的前幾筆（Phase J）；沒有就整塊不顯示，讀取失敗（例如還沒執行 migration）也不顯示
+  bindCoverFallback($('#ov-media', root));
+  data.listMedia().then((items) => {
+    const doing = items.filter((m) => m.status === 'doing').slice(0, 6);
+    const sec = $('#ov-media', root);
+    if (!sec || !doing.length) return;
+    $('#ov-media-list', root).innerHTML = doing.map((m) => `
+      <li><a href="#/media" data-media-doing>${coverHTML(m, 'sm')}
+        <span class="ovm-t">${esc(m.title)}</span><span class="sub">${esc(data.MEDIA_KINDS[m.kind])}</span></a></li>`).join('');
+    sec.hidden = false;
+  }).catch(() => {});
+  // 點了進書影單的「進行中」頁籤（篩選記在 localStorage，類型改回全部）
+  $('#ov-media', root).addEventListener('click', (e) => {
+    if (e.target.closest('[data-media-doing]')) saveMediaFilter({ status: 'doing', kind: '' });
+  });
   const noteForm = $('#ov-note', root);
   noteForm.onsubmit = async (e) => {
     e.preventDefault();
@@ -106,6 +143,7 @@ export function mountOverview(root) {
 
   return function render() {
     const day = today();
+    $('#ov-guide-tip', root).hidden = tipState === 'dismissed' || !(firstVisit || state.tasks.length === 0);
     // 生活的總覽：不含工作看板的工作（工作只留在工作看板）
     const { todo, top3 } = data.todayOverview(state.life.tasks, day);
     const s = state.summary;

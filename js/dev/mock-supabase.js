@@ -4,6 +4,7 @@
 const DB_KEY = 'lifeos-mock-db';
 const SESSION_KEY = 'lifeos-mock-session';
 const TZ_OFFSET_MS = 8 * 3600 * 1000; // Asia/Taipei
+const MOCK_PASSWORD_MIN = 6; // Supabase Auth 預設最短密碼長度
 
 const load = () => {
   const db = JSON.parse(localStorage.getItem(DB_KEY) || '{"users":{},"areas":[],"tasks":[]}');
@@ -20,7 +21,7 @@ const DEFAULTS = {
   notes: () => ({ area_id: null, body: null, category: null, tags: [], updated_at: now() }),
   habits: () => ({ area_id: null, target_per_week: 7, archived: false }),
   projects: () => ({ status: 'active', next_action: null, notes: null, updated_at: now(), start_date: null, end_date: null }),
-  goals: () => ({ due_date: null, status: 'active' }),
+  goals: () => ({ due_date: null, status: 'active', period: null }), // period：migration 20261105
   tasks: () => ({
     status: 'todo', priority: 2, starred: false, actual_min: 0, completed_at: null, notes: null,
     project_id: null, goal_id: null, due_date: null, scheduled_start: null, estimate_min: null, updated_at: now(),
@@ -28,7 +29,13 @@ const DEFAULTS = {
   }),
   work_tags: () => ({ color: '#667085', active: true, sort: 0 }), // migration 20261104
   routine_phrases: () => ({ sort: 0 }),
-  daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {} }),
+  daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {}, mood: null, energy: null }),
+  // migration 20261105_journal（Phase J）
+  period_reviews: () => ({ wins: null, lessons: null, next_focus: null, updated_at: now() }),
+  future_events: () => ({ day: null, area_id: null }),
+  media_items: () => ({ creator: null, release_year: null, cover_url: null, link_url: null, status: 'want', rating: null, review: null,
+    started_on: null, finished_on: null, tags: [], area_id: null, note_id: null, sort_order: null, updated_at: now() }),
+  bucket_items: () => ({ category: null, area_id: null, done_on: null, note: null, sort_order: null }),
 };
 
 function dailySummary(tasks, areas = []) {
@@ -189,6 +196,10 @@ class Query {
           const ids = new Set(out.map((r) => r.id));
           db.habit_logs = (db.habit_logs || []).filter((l) => !ids.has(l.habit_id));
         }
+        if (this.table === 'notes') { // media_items.note_id on delete set null（migration 20261105）
+          const ids = new Set(out.map((r) => r.id));
+          for (const m of db.media_items || []) if (ids.has(m.note_id)) m.note_id = null;
+        }
       }
       save(db);
     }
@@ -279,8 +290,52 @@ export function createMockClient() {
         return client.auth.signInWithPassword({ email, password });
       },
       async signOut() { setSess(null); return { error: null }; },
+      // 照 supabase-js／Supabase Auth 的行為：沒登入回 Auth session missing!；
+      // 新密碼少於 6 碼或與舊密碼相同時回錯誤；成功發出 USER_UPDATED
+      async updateUser({ password } = {}) {
+        const sess = getSess();
+        if (!sess) return { data: { user: null }, error: { message: 'Auth session missing!' } };
+        const db = load();
+        const u = db.users[sess.user.email];
+        if (!u) return { data: { user: null }, error: { message: 'User not found' } };
+        if (password !== undefined) {
+          if (String(password).length < MOCK_PASSWORD_MIN) {
+            return { data: { user: null }, error: { message: `Password should be at least ${MOCK_PASSWORD_MIN} characters.` } };
+          }
+          if (password === u.password) {
+            return { data: { user: null }, error: { message: 'New password should be different from the old password.' } };
+          }
+          u.password = password;
+        }
+        save(db);
+        listeners.forEach((cb) => cb('USER_UPDATED', sess));
+        return { data: { user: sess.user }, error: null };
+      },
+      // 真的 Supabase 不論 Email 是否註冊都回成功（避免被用來試帳號）；模擬模式不寄信，
+      // 對已註冊的 Email 回傳一個模擬的重設連結（data.mock_link，只有模擬模式有）
+      async resetPasswordForEmail(email, { redirectTo } = {}) {
+        if (!email) return { data: null, error: { message: 'Anonymous users cannot be recovered.' } };
+        const u = load().users[email];
+        if (!u) return { data: {}, error: null };
+        const base = redirectTo || `${location.origin}${location.pathname}`;
+        const mock_link = `${base}?mock=1#type=recovery&mock_email=${encodeURIComponent(email)}`;
+        console.info('[mock] 重設密碼連結：', mock_link);
+        return { data: { mock_link }, error: null };
+      },
     },
   };
+  // 模擬「點重設信的連結回來」：hash 帶 type=recovery 時，登入該帳號並在下一輪發出 PASSWORD_RECOVERY，
+  // 然後清掉 hash（supabase-js 的 implicit flow 也是 setTimeout 0 才通知、並清掉網址上的 token）
+  {
+    const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    const email = h.get('mock_email');
+    if (h.get('type') === 'recovery' && email && load().users[email]) {
+      const session = { user: { id: load().users[email].id, email } };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      window.location.hash = '';
+      setTimeout(() => listeners.forEach((cb) => cb('PASSWORD_RECOVERY', session)), 0);
+    }
+  }
   if (!getSess()) {
     const db = load();
     db.users[DEMO_EMAIL] ||= { id: uuid(), password: DEMO_PASSWORD };

@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Life OS</title>
   <meta name="theme-color" content="#173b34">
+  <!-- 網站圖示：相對路徑（GitHub Pages 在 /life-os/ 子路徑下）；PNG 由 favicon.svg 以 macOS qlmanage／sips 轉出 -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap">
@@ -35,6 +39,7 @@
       <div class="running-bar" id="running-bar" hidden></div>
       <div class="sidebar-foot">
         <div class="user" id="user-email"></div>
+        <button class="btn-ghost" id="account-btn">修改密碼</button>
         <button class="btn-ghost" id="signout-btn">登出</button>
       </div>
     </aside>
@@ -55,6 +60,8 @@
   <dialog id="case-dialog" class="wide"></dialog>
   <dialog id="phrase-dialog" class="wide"></dialog>
   <dialog id="report-dialog" class="wide rp-dialog"></dialog>
+  <dialog id="account-dialog"></dialog>
+  <dialog id="journal-dialog"></dialog>
   <dialog id="confirm-dialog">
     <form method="dialog">
       <p id="confirm-message"></p>

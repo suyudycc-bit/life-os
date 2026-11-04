@@ -15,6 +15,8 @@ const FIELDS = [
   ['tomorrow_improve', '明日改進', '明天要怎麼做得更好？'],
 ];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+// 心情／能量（Phase J）：寫入 daily_reviews 的 mood／energy（data.saveMood），年度手帳的 Year in Pixels 讀同一份
+const MOOD_ROWS = [['mood', '心情', data.MOOD_LEVELS], ['energy', '能量', data.ENERGY_LEVELS]];
 
 const ui = { day: today() };
 
@@ -47,6 +49,14 @@ export function mountReview(root) {
         <ul class="rv-tasks" id="rv-tasks"></ul>
       </section>
     </div>
+    <section class="card rv-mood">
+      <div class="day-head"><h2 id="rv-mood-title">今天的心情／能量</h2><span class="sub" id="rv-mood-save" role="status"></span></div>
+      ${MOOD_ROWS.map(([k, label, levels]) => `<div class="mood-row"><span class="mood-k">${label}</span>
+        <div class="mood-pick" role="group" aria-label="${label}">${[1, 2, 3, 4, 5].map((v) => `
+          <button type="button" data-mood="${k}" data-v="${v}" aria-pressed="false" title="${v} ${levels[v]}"><i class="sw ${k === 'mood' ? 'm' : 'e'}${v}" aria-hidden="true"></i>${v}<span class="mood-word"> ${levels[v]}</span></button>`).join('')}
+        </div></div>`).join('')}
+      <p class="sub">和「年度手帳」的 Year in Pixels 是同一份；再點一次已選的可以取消。</p>
+    </section>
     <section class="card">
       <div class="day-head"><h2>復盤筆記</h2><span class="sub" id="rv-save" role="status"></span></div>
       <form id="rv-form" class="rv-form">
@@ -127,6 +137,30 @@ export function mountReview(root) {
     };
   }
 
+  // 心情／能量：點了立刻存（只寫這兩欄，不動三格筆記）
+  $('.rv-mood', root).addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-mood]');
+    if (!b) return;
+    const k = b.dataset.mood;
+    const day = ui.day;
+    const v = ui.mood?.[k] === Number(b.dataset.v) ? null : Number(b.dataset.v); // 再點一次＝取消
+    try {
+      await data.saveMood(day, { [k]: v });
+      if (day !== ui.day) return;
+      ui.mood = { ...ui.mood, [k]: v };
+      renderMood();
+      $('#rv-mood-save', root).textContent = v ? `已記錄：${b.title}` : '已取消';
+    } catch (err) {
+      $('#rv-mood-save', root).textContent = `儲存失敗：${err.message}`;
+    }
+  });
+  function renderMood() {
+    $('#rv-mood-title', root).textContent = `${ui.day === today() ? '今天' : `${formatShort(ui.day)} `}的心情／能量`;
+    root.querySelectorAll('[data-mood]').forEach((b) => {
+      b.setAttribute('aria-pressed', String(ui.mood?.[b.dataset.mood] === Number(b.dataset.v)));
+    });
+  }
+
   // 自動儲存：停止輸入 0.8 秒後存；離開欄位時立刻存
   form.addEventListener('input', () => {
     dirtyDay = ui.day;
@@ -181,6 +215,9 @@ export function mountReview(root) {
       saveEl.textContent = review ? '' : '尚未填寫';
     }
 
+    if (dayChanged) $('#rv-mood-save', root).textContent = '';
+    ui.mood = { mood: review?.mood ?? null, energy: review?.energy ?? null };
+    renderMood();
     renderStats();
     loadHistory();
   }

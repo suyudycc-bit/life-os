@@ -13,7 +13,7 @@ export async function getSession() {
   return must(await supabase.auth.getSession()).session;
 }
 export function onAuthChange(cb) {
-  supabase.auth.onAuthStateChange((_event, session) => cb(session));
+  supabase.auth.onAuthStateChange((event, session) => cb(session, event));
 }
 export async function signIn(email, password) {
   return must(await supabase.auth.signInWithPassword({ email, password }));
@@ -23,6 +23,48 @@ export async function signUp(email, password) {
 }
 export async function signOut() {
   must(await supabase.auth.signOut());
+}
+
+// ===== 密碼（docs/09「修改密碼與忘記密碼」）=====
+// Supabase 預設最少 6 碼（supabase/auth 原始碼 defaultMinPasswordLength = 6；後台可調高）
+export const PASSWORD_MIN = 6;
+
+/** 已登入時修改密碼：先用目前密碼重新驗證，再更新。錯誤訊息已轉成中文 */
+export async function changePassword(currentPassword, newPassword) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error('登入已失效，請重新登入');
+  const check = await supabase.auth.signInWithPassword({ email: session.user.email, password: currentPassword });
+  if (check.error) throw new Error(authErrorText(check.error.message, '目前密碼不正確'));
+  await updatePassword(newPassword);
+}
+
+/** 直接設定新密碼（忘記密碼的信件連結回來後用；此時已有臨時登入狀態） */
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(authErrorText(error.message));
+}
+
+/** 寄重設密碼信；redirectTo 是信件連結回來的網址，必須在 Supabase 後台的 Redirect URLs 名單內 */
+export async function requestPasswordReset(email, redirectTo) {
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw new Error(authErrorText(error.message));
+  return data;
+}
+
+/** 把 Supabase Auth 的英文錯誤轉成看得懂的中文；認不得的保留原文 */
+export function authErrorText(msg = '', invalidCredentials = 'Email 或密碼錯誤') {
+  const m = String(msg);
+  if (/invalid login credentials/i.test(m)) return invalidCredentials;
+  if (/different from the old password/i.test(m)) return '新密碼不能和目前的密碼相同';
+  const len = m.match(/at least (\d+) characters/i);
+  if (len) return `密碼太短，至少要 ${len[1]} 碼`;
+  if (/weak|pwned|leaked/i.test(m)) return `密碼強度不足，請換一個更難猜的密碼（${m}）`;
+  if (/session missing|session not found|jwt expired|invalid jwt/i.test(m)) return '登入已失效（重設連結可能已過期），請重新登入或重新申請重設密碼';
+  if (/reauthenticat/i.test(m)) return `Supabase 後台開啟了「修改密碼需重新驗證」，目前介面尚未支援（${m}）`;
+  if (/rate limit|security purposes|too many/i.test(m)) return '請求太頻繁，請稍後再試';
+  if (/failed to fetch|network/i.test(m)) return '連線失敗，請確認網路後再試';
+  if (/redirect/i.test(m)) return `重設連結的網址不被允許，請到 Supabase 後台把網站網址加進 Redirect URLs（${m}）`;
+  return m;
 }
 
 // ===== 領域 =====
@@ -730,6 +772,8 @@ export async function saveProject(p) {
 
 export async function saveGoal(g) {
   const row = { title: g.title?.trim(), area_id: g.area_id, due_date: g.due_date || null, status: g.status || 'active' };
+  if ('period' in g) row.period = g.period || null; // Phase J：沒傳就不動，專案頁編輯目標不會清掉期間
+  if (row.period && !isPeriod(row.period)) throw new Error('期間格式不正確');
   if (!row.title) throw new Error('請輸入目標');
   if (!row.area_id) throw new Error('請選擇領域');
   if (!GOAL_STATUS[row.status]) throw new Error('狀態不正確');
@@ -796,11 +840,13 @@ export function ganttData(projects, goals, tasks, day = today()) {
 // ===== 資料與備份（M8）=====
 // 匯出／匯入的資料表，順序＝匯入順序（先被參照的在前）
 export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks', 'task_memos', 'time_entries',
-  'daily_reviews', 'notes', 'habits', 'habit_logs', 'routine_phrases'];
+  'daily_reviews', 'notes', 'habits', 'habit_logs', 'routine_phrases',
+  'period_reviews', 'future_events', 'media_items', 'bucket_items'];
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
   work_tags: '工作種類', routine_phrases: '常用詞組',
+  period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -832,6 +878,9 @@ const BACKUP_REFS = {
   notes: { area_id: 'areas' },
   habits: { area_id: 'areas' },
   habit_logs: { habit_id: 'habits' },
+  future_events: { area_id: 'areas' },
+  media_items: { area_id: 'areas', note_id: 'notes' },
+  bucket_items: { area_id: 'areas' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -847,6 +896,10 @@ const NATURAL_KEY = {
   habit_logs: (r) => `${r.habit_id}|${r.log_date}`,
   work_tags: (r) => r.label,
   routine_phrases: (r) => r.body,
+  period_reviews: (r) => r.period,
+  future_events: (r) => `${r.month}|${r.day ?? ''}|${r.title}`,
+  media_items: (r) => `${r.kind}|${r.title}|${r.created_at}`,
+  bucket_items: (r) => `${r.title}|${r.created_at}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -1079,4 +1132,366 @@ export async function getDailySummary(day = today(), { work = false } = {}) {
   if (res.error && /is_work/.test(res.error.message || '')) res = await supabase.from('daily_summary').select('*').eq('day', day).maybeSingle();
   const row = must(res);
   return row || { day, tasks_total: 0, tasks_done: 0, completion_pct: null, actual_min: 0, estimate_min: 0, actual_sec: 0 };
+}
+
+// ===== 手帳（Phase J）：期間、回顧、Future Log、Year in Pixels、書影單、想做清單 =====
+// 共用資料層：年度頁、月度頁、書影單、想做清單都只呼叫這裡（migration 20261105_journal.sql）
+
+/** 期間字串：'2026'（年）、'2026-Q4'（季）、'2026-11'（月） */
+export function isPeriod(p) {
+  return /^[0-9]{4}(-Q[1-4]|-(0[1-9]|1[0-2]))?$/.test(String(p || ''));
+}
+export const yearOf = (day) => day.slice(0, 4);
+export const monthOf = (day) => day.slice(0, 7);
+export const quarterOf = (day) => `${day.slice(0, 4)}-Q${Math.floor((Number(day.slice(5, 7)) - 1) / 3) + 1}`;
+/** 期間的第一天與最後一天（台北日期，含頭尾） */
+export function periodRange(period) {
+  if (!isPeriod(period)) throw new Error('期間格式不正確');
+  const y = Number(period.slice(0, 4));
+  let m1 = 1, m2 = 12;
+  if (/-Q/.test(period)) { const q = Number(period.slice(-1)); m1 = q * 3 - 2; m2 = q * 3; }
+  else if (period.length === 7) { m1 = m2 = Number(period.slice(5)); }
+  const pad = (n) => String(n).padStart(2, '0');
+  const last = new Date(Date.UTC(y, m2, 0)).getUTCDate();
+  return { from: `${y}-${pad(m1)}-01`, to: `${y}-${pad(m2)}-${pad(last)}` };
+}
+/** 下一個月：'2026-12' → '2027-01' */
+export function nextMonth(month) {
+  const y = Number(month.slice(0, 4)), m = Number(month.slice(5));
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+/** 掛在某期間的目標（goals 同一份；傳 '2026' 只拿年度目標，不含季、月） */
+export const goalsOfPeriod = (goals, period) => goals.filter((g) => g.period === period);
+
+// --- 期間回顧（月／季／年）---
+export async function getPeriodReview(period) {
+  if (!isPeriod(period)) throw new Error('期間格式不正確');
+  return must(await supabase.from('period_reviews').select('*').eq('period', period).maybeSingle());
+}
+export async function savePeriodReview(period, { wins, lessons, next_focus }) {
+  if (!isPeriod(period)) throw new Error('期間格式不正確');
+  const session = await getSession();
+  return must(await supabase.from('period_reviews').upsert({
+    user_id: session.user.id, period, wins: wins?.trim() || null, lessons: lessons?.trim() || null,
+    next_focus: next_focus?.trim() || null, updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,period' }).select().single());
+}
+
+// --- Future Log ---
+export async function listFutureEvents(year) {
+  return must(await supabase.from('future_events').select('*')
+    .gte('month', `${year}-01`).lte('month', `${year}-12`).order('month').order('day'));
+}
+export async function saveFutureEvent(e) {
+  const row = { month: e.month, day: e.day ? Number(e.day) : null, title: e.title?.trim(), area_id: e.area_id || null };
+  if (!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(row.month || '')) throw new Error('月份格式不正確');
+  if (!row.title) throw new Error('請輸入事件');
+  if (row.day != null && !(row.day >= 1 && row.day <= Number(periodRange(row.month).to.slice(8)))) throw new Error('日期超出這個月');
+  if (e.id) return must(await supabase.from('future_events').update(row).eq('id', e.id).select().single());
+  return must(await supabase.from('future_events').insert(row).select().single());
+}
+export async function deleteFutureEvent(id) {
+  const rows = must(await supabase.from('future_events').delete().eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error(`預期刪除 1 筆，實際 ${rows.length} 筆`);
+}
+
+// --- Year in Pixels：心情／能量存在當天的 daily_reviews（只寫這兩欄，不動復盤文字）---
+export const MOOD_LEVELS = { 1: '很糟', 2: '不太好', 3: '普通', 4: '不錯', 5: '很好' };
+export async function saveMood(day, { mood, energy }) {
+  const row = {};
+  if (mood !== undefined) row.mood = mood ? Number(mood) : null;
+  if (energy !== undefined) row.energy = energy ? Number(energy) : null;
+  for (const v of Object.values(row)) if (v != null && !(v >= 1 && v <= 5)) throw new Error('請選 1～5');
+  const session = await getSession();
+  return must(await supabase.from('daily_reviews').upsert({
+    user_id: session.user.id, review_date: day, ...row, updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,review_date' }).select().single());
+}
+/** 一年的心情／能量：{ 'YYYY-MM-DD': { mood, energy } } */
+export async function listMoods(year) {
+  const rows = must(await supabase.from('daily_reviews').select('*')
+    .gte('review_date', `${year}-01-01`).lte('review_date', `${year}-12-31`));
+  return Object.fromEntries(rows.filter((r) => r.mood || r.energy).map((r) => [r.review_date, { mood: r.mood ?? null, energy: r.energy ?? null }]));
+}
+
+// --- 書影單 ---
+export const MEDIA_KINDS = { book: '書', movie: '電影', tv: '影集', podcast: 'Podcast', course: '課程' };
+export const MEDIA_STATUS = { want: '想看', doing: '進行中', done: '看完', dropped: '放棄' };
+export async function listMedia() {
+  return must(await supabase.from('media_items').select('*').order('created_at', { ascending: false }));
+}
+export async function saveMedia(m) {
+  const row = {
+    kind: m.kind, title: m.title?.trim(), creator: m.creator?.trim() || null,
+    release_year: m.release_year ? Number(m.release_year) : null,
+    cover_url: m.cover_url?.trim() || null, link_url: m.link_url?.trim() || null,
+    status: m.status || 'want', rating: m.rating ? Number(m.rating) : null, review: m.review?.trim() || null,
+    started_on: m.started_on || null, finished_on: m.finished_on || null,
+    tags: Array.isArray(m.tags) ? m.tags : parseTags(m.tags), area_id: m.area_id || null,
+    updated_at: new Date().toISOString(),
+  };
+  if ('note_id' in m) row.note_id = m.note_id || null;
+  if ('sort_order' in m) row.sort_order = m.sort_order ?? null;
+  if (!MEDIA_KINDS[row.kind]) throw new Error('請選擇類型');
+  if (!row.title) throw new Error('請輸入名稱');
+  if (!MEDIA_STATUS[row.status]) throw new Error('狀態不正確');
+  if (row.cover_url && !/^https:\/\//.test(row.cover_url)) throw new Error('封面網址要以 https:// 開頭');
+  if (row.link_url && !/^https?:\/\//.test(row.link_url)) throw new Error('連結要以 http:// 或 https:// 開頭');
+  if (row.rating != null && !(row.rating >= 1 && row.rating <= 5)) throw new Error('評分是 1～5');
+  // 標成看完時自動補完成日（台北今天），之後可以改
+  if (row.status === 'done' && !row.finished_on) row.finished_on = today();
+  if (row.started_on && row.finished_on && row.finished_on < row.started_on) throw new Error('看完日不能早於開始日');
+  if (m.id) return must(await supabase.from('media_items').update(row).eq('id', m.id).select().single());
+  return must(await supabase.from('media_items').insert(row).select().single());
+}
+export async function deleteMedia(id) {
+  const rows = must(await supabase.from('media_items').delete().eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error(`預期刪除 1 筆，實際 ${rows.length} 筆`);
+}
+/** 把心得存進靈感知識庫（同一筆只建一則；已存過就更新那一則） */
+export async function saveMediaReviewToNote(m) {
+  if (!m.review?.trim()) throw new Error('先寫心得再存進知識庫');
+  const title = `${MEDIA_KINDS[m.kind]}｜${m.title}`;
+  const body = [m.creator && `作者／創作者：${m.creator}`, m.rating && `評分：${'★'.repeat(m.rating)}`, m.link_url, '', m.review.trim()]
+    .filter((x) => x !== null && x !== undefined && x !== false).join('\n');
+  const note = await saveNote({ id: m.note_id || undefined, title, body, area_id: m.area_id, tags: ['書影單', MEDIA_KINDS[m.kind], ...(m.tags || [])].join(' ') });
+  if (note.id !== m.note_id) must(await supabase.from('media_items').update({ note_id: note.id }).eq('id', m.id).select('id'));
+  return note;
+}
+/** 某年看完的數量，依類型：{ book: 3, movie: 5, ... , total: 8 } */
+export function mediaDoneCount(items, year) {
+  const out = { total: 0 };
+  for (const m of items) {
+    if (m.status !== 'done' || !m.finished_on || m.finished_on.slice(0, 4) !== String(year)) continue;
+    out[m.kind] = (out[m.kind] || 0) + 1;
+    out.total++;
+  }
+  return out;
+}
+
+// --- 想做清單 ---
+export async function listBucket() {
+  return must(await supabase.from('bucket_items').select('*').order('created_at', { ascending: false }));
+}
+export async function saveBucket(b) {
+  const row = { title: b.title?.trim(), category: b.category?.trim() || null, area_id: b.area_id || null,
+    done_on: b.done_on || null, note: b.note?.trim() || null };
+  if ('sort_order' in b) row.sort_order = b.sort_order ?? null;
+  if (!row.title) throw new Error('請輸入想做的事');
+  if (b.id) return must(await supabase.from('bucket_items').update(row).eq('id', b.id).select().single());
+  return must(await supabase.from('bucket_items').insert(row).select().single());
+}
+export async function deleteBucket(id) {
+  const rows = must(await supabase.from('bucket_items').delete().eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error(`預期刪除 1 筆，實際 ${rows.length} 筆`);
+}
+
+// ===== 手帳（Phase J）介面用的衍生計算：月度手帳、想做清單 =====
+// 放在共用資料層之後、不改上面任何函式；月度頁（views/month.js）與想做清單（views/bucket.js）只呼叫這裡。
+
+/** 上／下一個月：shiftMonth('2026-01', -1) → '2025-12' */
+export function shiftMonth(month, n) {
+  const y = Number(month.slice(0, 4)), m = Number(month.slice(5));
+  return new Date(Date.UTC(y, m - 1 + n, 1)).toISOString().slice(0, 7);
+}
+
+/**
+ * 月誌（bullet journal 的日期直列）：這個月每天一行，列出那天到期或排程的任務（同日曆的 calendarItems，
+ * 放棄的不列）與 Future Log 事件（有 day 的放在那天，只到月的放在 undated）。
+ * @param tasks 呼叫端傳生活那一份（state.life.tasks）
+ */
+export function monthJournal(tasks, month, events = []) {
+  const { from, to } = periodRange(month);
+  const items = calendarItems(tasks, from, to);
+  const mine = events.filter((e) => e.month === month);
+  const days = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const dow = new Date(`${d}T12:00:00+08:00`).getUTCDay(); // 0=週日
+    days.push({ day: d, dow, weekend: dow === 0 || dow === 6, items: items[d] || [],
+      events: mine.filter((e) => e.day === Number(d.slice(8))) });
+  }
+  return { days, undated: mine.filter((e) => e.day == null) };
+}
+
+/**
+ * 遷移候選（只在「本月」頁做）：還沒完成、代表日期（到期日，沒有就排程日）已經過了的任務。
+ * group：'last'＝上個月、'earlier'＝更早、'this'＝本月已過期。
+ */
+export function migrationCandidates(tasks, day = today()) {
+  const month = monthOf(day);
+  const last = shiftMonth(month, -1);
+  return tasks.filter((t) => isOpen(t) && taskDay(t) && taskDay(t) < day)
+    .map((t) => {
+      const d = taskDay(t);
+      return { task: t, day: d, group: d >= `${month}-01` ? 'this' : monthOf(d) === last ? 'last' : 'earlier' };
+    })
+    .sort((a, b) => a.day.localeCompare(b.day) || compareTasks(a.task, b.task));
+}
+export const MIGRATE_ACTIONS = { forward: '遷移到本月', later: '排到下個月', drop: '不做了' };
+
+/**
+ * 遷移：一律改任務本身，不複製（docs/02「月度遷移」）。
+ * - forward：到期日改成 targetDay（本月、今天以後的某天）
+ * - later：到期日改成下個月 1 日
+ * - drop：狀態改「放棄」（正在計時的先停止計時）
+ * 有排程時間的任務，排程日一起搬到新日期、保留原本時刻（同日曆拖移），免得任務還掛在舊的那天。
+ * @returns 實際更新的筆數（不等於選取筆數時丟錯）
+ */
+export async function migrateTasks(ids, action, { targetDay, tasks, running = null, day = today() } = {}) {
+  if (!MIGRATE_ACTIONS[action]) throw new Error('遷移動作不正確');
+  if (!ids?.length) throw new Error('請先選擇任務');
+  const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
+  const month = monthOf(day);
+  let newDay = null;
+  if (action === 'forward') {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDay || '')) throw new Error('請選遷移到哪一天');
+    if (targetDay < day || monthOf(targetDay) !== month) throw new Error('只能遷移到本月今天以後的日子');
+    newDay = targetDay;
+  }
+  if (action === 'later') newDay = `${nextMonth(month)}-01`;
+  const patches = ids.map((id) => {
+    const t = byId[id];
+    if (!t || !isOpen(t)) throw new Error('有任務已經完成或不存在，請重新整理');
+    if (action === 'drop') return { id, patch: { status: 'dropped' } };
+    const patch = { due_date: newDay };
+    if (t.scheduled_start) patch.scheduled_start = fromLocalInput(`${newDay}T${toLocalInput(t.scheduled_start).slice(11, 16)}`);
+    return { id, patch };
+  });
+  if (action === 'drop' && running && ids.includes(running.task_id)) await stopTimer(running);
+  const results = await Promise.all(patches.map(({ id, patch }) =>
+    supabase.from('tasks').update(patch).eq('id', id).select('id')));
+  const updated = results.reduce((n, r) => n + must(r).length, 0);
+  if (updated !== ids.length) throw new Error(`遷移預期更新 ${ids.length} 筆，實際 ${updated} 筆`);
+  return updated;
+}
+
+/**
+ * 月回顧的數字（唯讀）：
+ * - doneCount：這個月完成的任務（完成那天落在本月，同 summaryDay）
+ * - timeSec：這個月開始、已結束的計時加總（資料庫的 duration_sec）
+ * - goalsDone／goalsTotal：月目標達成數／總數（放棄的不算）
+ * @param tasks、entries 呼叫端傳生活那一份
+ */
+export function monthStats({ tasks, entries, goals, month }) {
+  const doneCount = tasks.filter((t) => t.status === 'done' && monthOf(summaryDay(t) || '') === month).length;
+  const timeSec = entries.filter((e) => e.ended_at && monthOf(localDate(e.started_at)) === month)
+    .reduce((n, e) => n + entrySeconds(e), 0);
+  const mg = goalsOfPeriod(goals, month).filter((g) => g.status !== 'dropped');
+  return { doneCount, timeSec, goalsDone: mg.filter((g) => g.status === 'done').length, goalsTotal: mg.length };
+}
+
+// --- 想做清單：排序、分類 ---
+export const BUCKET_CATEGORIES = ['想去的地方', '想學的東西', '想體驗的事', '想完成的事'];
+/** 分類建議：常用分類＋自己用過的 */
+export function bucketCategories(items) {
+  return [...new Set([...BUCKET_CATEGORIES, ...items.map((b) => b.category).filter(Boolean)])];
+}
+/** 未完成在前；有 sort_order（拖移過）的依它，否則新的在前；已完成的依完成日新到舊 */
+export function compareBucket(a, b) {
+  const ad = a.done_on ? 1 : 0, bd = b.done_on ? 1 : 0;
+  if (ad !== bd) return ad - bd;
+  if (ad) return b.done_on.localeCompare(a.done_on) || (b.created_at || '').localeCompare(a.created_at || '');
+  const ao = a.sort_order ?? Infinity, bo = b.sort_order ?? Infinity;
+  return (ao === bo ? 0 : ao < bo ? -1 : 1) || (b.created_at || '').localeCompare(a.created_at || '');
+}
+/** 新增：若已拖移排過序，放在最上面（同 createTask） */
+export async function addBucket(b, items = []) {
+  const orders = items.map((x) => x.sort_order).filter((v) => v != null);
+  return saveBucket({ ...b, sort_order: orders.length ? Math.min(...orders) - 1 : null });
+}
+/** 拖移後的完整順序：在全部未完成項目的目前順序中，把 draggedId 移到新鄰居的位置（分類篩選中拖也不亂） */
+export function moveBucket(items, draggedId, nextId, prevId) {
+  const order = items.filter((b) => !b.done_on).sort(compareBucket).map((b) => b.id).filter((id) => id !== draggedId);
+  let i = nextId ? order.indexOf(nextId) : -1;
+  if (i < 0) i = prevId ? order.indexOf(prevId) + 1 : order.length;
+  order.splice(i, 0, draggedId);
+  return order;
+}
+/** 依新順序寫入 bucket_items.sort_order，只更新有變動的（同 reorderTasks） */
+export async function reorderBucket(orderedIds, itemsById) {
+  const changed = orderedIds
+    .map((id, i) => ({ id, sort_order: (i + 1) * 1000 }))
+    .filter(({ id, sort_order }) => itemsById[id]?.sort_order !== sort_order);
+  const results = await Promise.all(changed.map(({ id, sort_order }) =>
+    supabase.from('bucket_items').update({ sort_order }).eq('id', id).select('id')));
+  const updated = results.reduce((n, r) => n + must(r).length, 0);
+  if (updated !== changed.length) throw new Error(`排序預期更新 ${changed.length} 筆，實際 ${updated} 筆`);
+}
+
+// --- 年度頁（#/year）的衍生計算 ---
+// 加在這裡的原因：年度頁需要「整年的計時」與「依月份整理的 Future Log／年度數字」，
+// 既有的 listEntries 只讀近 7 天，也沒有年度彙總；算法集中在這裡，UI 只顯示。
+
+/** 能量的文字（心情用上面的 MOOD_LEVELS）；年度頁與每日復盤共用 */
+export const ENERGY_LEVELS = { 1: '很低', 2: '偏低', 3: '普通', 4: '不錯', 5: '充沛' };
+
+/** 期間的中文標籤：'2026' → '2026 年'、'2026-Q4' → '2026 Q4'、'2026-11' → '2026 年 11 月' */
+export function periodLabel(p) {
+  if (!isPeriod(p)) return '';
+  if (p.length === 4) return `${p} 年`;
+  if (p.includes('-Q')) return `${p.slice(0, 4)} ${p.slice(5)}`;
+  return `${p.slice(0, 4)} 年 ${Number(p.slice(5))} 月`;
+}
+
+/** 開始時間（台北日期）落在 fromDay～toDay（含）的計時紀錄；一年可能超過 1000 筆，分頁讀完 */
+export async function listEntriesBetween(fromDay, toDay) {
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const rows = must(await supabase.from('time_entries').select('*')
+      .gte('started_at', dayStartISO(fromDay)).lt('started_at', dayStartISO(addDays(toDay, 1)))
+      .order('started_at').order('id').range(from, from + PAGE - 1));
+    out.push(...rows);
+    if (rows.length < PAGE) return out;
+  }
+}
+
+/**
+ * Future Log：一年 12 個月，每月列出
+ * - events：future_events（自己記的，日留白的排最前）
+ * - goals：該月到期（goals.due_date）的目標，不含放棄的
+ * - starred：該月到期（due_date）且有星號的任務，不含放棄的；只讀，不複製
+ */
+export function futureLogMonths(year, events, goals, tasks) {
+  return Array.from({ length: 12 }, (_, i) => {
+    const month = `${year}-${String(i + 1).padStart(2, '0')}`;
+    const inMonth = (d) => !!d && d.slice(0, 7) === month;
+    return {
+      month,
+      events: events.filter((e) => e.month === month).sort((a, b) => (a.day ?? 0) - (b.day ?? 0)),
+      goals: goals.filter((g) => inMonth(g.due_date) && g.status !== 'dropped').sort((a, b) => a.due_date.localeCompare(b.due_date)),
+      starred: tasks.filter((t) => t.starred && inMonth(t.due_date) && t.status !== 'dropped').sort((a, b) => a.due_date.localeCompare(b.due_date)),
+    };
+  });
+}
+
+/**
+ * 年度數據（年份以台北日期判斷；任務與計時只算生活：領域的 on_board 不為真）
+ * - tasksDone：狀態完成、completed_at 在這一年的生活任務數
+ * - timeSec：開始時間在這一年、已結束的生活計時加總（秒）
+ * - yearGoals／quarterGoals：年度目標（period＝'YYYY'）與各季目標（'YYYY-Qn'）的達成數／總數（不含放棄）
+ * - media：書影單這一年看完的數量（mediaDoneCount）
+ * - habitDays：這一年至少打卡一次的天數；habitLogs：打卡總次數
+ * @param entries 這一年的計時（listEntriesBetween(年初, 年底)）；進行中的不算
+ */
+export function yearStats({ year, tasks, entries, goals, habitLogs, media, areasById }) {
+  const y = String(year);
+  const life = (areaId) => areasById[areaId]?.on_board !== true;
+  const tasksDone = tasks.filter((t) => t.status === 'done' && t.completed_at
+    && localDate(t.completed_at).slice(0, 4) === y && life(t.area_id)).length;
+  const timeSec = entries.filter((e) => e.ended_at && localDate(e.started_at).slice(0, 4) === y && life(e.area_id))
+    .reduce((n, e) => n + entrySeconds(e), 0);
+  const count = (period) => {
+    const list = goals.filter((g) => g.period === period && g.status !== 'dropped');
+    return { done: list.filter((g) => g.status === 'done').length, total: list.length };
+  };
+  const logs = habitLogs.filter((l) => String(l.log_date).slice(0, 4) === y);
+  return {
+    tasksDone,
+    timeSec,
+    yearGoals: count(y),
+    quarterGoals: [1, 2, 3, 4].map((q) => ({ q, ...count(`${y}-Q${q}`) })),
+    media: mediaDoneCount(media, y),
+    habitDays: new Set(logs.map((l) => l.log_date)).size,
+    habitLogs: logs.length,
+  };
 }

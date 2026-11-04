@@ -5,7 +5,7 @@ import * as config from '../config.js';
 import * as data from '../data.js';
 import { state, refreshTasks, refreshAreas } from '../store.js';
 import { $, esc, toast, linkLabel, pastedLink } from '../ui.js';
-import { today, formatShort, formatHMS, addDays } from '../dates.js';
+import { today, formatShort, formatHMS } from '../dates.js';
 import { openTaskEditor, openMemoDialog, startTimer } from './task-actions.js';
 import { openAreaDialog } from './area-dialog.js';
 import { openWrapUp } from './wrapup-dialog.js';
@@ -24,7 +24,7 @@ export function openBoardSettings() {
     dlg.innerHTML = `
       <form>
         <h2>工作看板要列入哪些領域</h2>
-        <p class="sub">勾選的領域，任務才會出現在工作看板與總覽「今天的工作」。可以隨時改，任務本身不會變。</p>
+        <p class="sub">勾選的領域算「工作」：任務只出現在工作看板，不會出現在任務管理、總覽等生活頁面。可以隨時改，任務本身不會變。</p>
         <ul class="wb-area-list">${state.areas.map((a) => `
           <li><label class="check"><input type="checkbox" name="area" value="${a.id}" ${a.on_board ? 'checked' : ''}>
             <span class="chip" style="--c:${esc(a.color || '#888')}"><i></i>${esc(a.name)}</span></label></li>`).join('')}</ul>
@@ -529,11 +529,4 @@ export function mountWorkBoard(root) {
   }
 
   return () => paint();
-}
-
-// 總覽用：今天各欄筆數與進行中的工作
-export function todayBoardSummary() {
-  const day = today();
-  const cols = data.boardColumns(state.tasks, state.areasById, day);
-  return { day, cols, tomorrow: data.nextWorkingDay(day), yesterday: addDays(day, -1) };
 }

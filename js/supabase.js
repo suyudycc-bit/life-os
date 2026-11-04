@@ -7,6 +7,12 @@ export const isConfigured = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 // 網址加 ?mock=1 一律使用本機模擬資料庫（即使已設定 Supabase），方便調整介面
 export const isMock = new URLSearchParams(location.search).has('mock');
 
+// 從「重設密碼」信件連結回來時，網址 hash 會帶 type=recovery（失效的連結則帶 error_description）。
+// supabase-js 建立 client 時會讀走並清掉 hash，所以要在建立之前先記下來（docs/09「忘記密碼」）
+const urlHash = new URLSearchParams(location.hash.replace(/^#/, ''));
+export const recoveryInUrl = urlHash.get('type') === 'recovery';
+export const authUrlError = urlHash.get('error_description') || urlHash.get('error_code') || '';
+
 async function createClientForEnv() {
   if (isMock) {
     // 僅供本機測試介面；資料存在這台瀏覽器，不會同步，也不會碰到 Supabase

@@ -58,9 +58,19 @@ function openProjectDialog(p = null) {
   });
 }
 
-function openGoalDialog(g = null) {
+/** 期間選單（Phase J）：不指定／前後一年的年、季、月；目前的值不在範圍內也保留 */
+function periodOptions(selected) {
+  const y = Number((selected || today()).slice(0, 4));
+  const opt = (p) => `<option value="${p}" ${p === selected ? 'selected' : ''}>${data.periodLabel(p)}</option>`;
+  const groups = [y - 1, y, y + 1].map((yr) => `<optgroup label="${yr}">${[String(yr), ...[1, 2, 3, 4].map((q) => `${yr}-Q${q}`),
+    ...Array.from({ length: 12 }, (_, i) => `${yr}-${String(i + 1).padStart(2, '0')}`)].map(opt).join('')}</optgroup>`).join('');
+  return `<option value="">不指定期間</option>${groups}`;
+}
+
+/** 目標對話框；年度手帳也用它（preset：新增時預先帶入的 period、area_id） */
+export function openGoalDialog(g = null, preset = {}) {
   const dlg = $('#project-dialog');
-  const v = g || { title: '', area_id: state.areas[0]?.id, due_date: '', status: 'active' };
+  const v = g || { title: '', area_id: state.areas[0]?.id, due_date: '', status: 'active', period: '', ...preset };
   dlg.innerHTML = `
     <form>
       <h2>${g ? '編輯目標' : '新增目標'}</h2>
@@ -69,7 +79,11 @@ function openGoalDialog(g = null) {
         <label>領域<select name="area_id">${areaOptions(v.area_id)}</select></label>
         <label>期限<input type="date" name="due_date" value="${v.due_date || ''}"></label>
       </div>
-      <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      <div class="row">
+        <label>期間<select name="period">${periodOptions(v.period || '')}</select></label>
+        <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+      </div>
+      <p class="sub">期間＝這是哪一年、哪一季或哪個月的目標，會出現在年度手帳對應的位置。</p>
       <div class="dialog-actions">
         ${g ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
         <button type="button" class="btn-ghost" data-cancel>取消</button>
@@ -77,7 +91,7 @@ function openGoalDialog(g = null) {
       </div>
     </form>`;
   bindDialog(dlg, g, {
-    save: (f) => data.saveGoal({ id: g?.id, title: f.get('title'), area_id: f.get('area_id'), due_date: f.get('due_date'), status: f.get('status') }),
+    save: (f) => data.saveGoal({ id: g?.id, title: f.get('title'), area_id: f.get('area_id'), due_date: f.get('due_date'), status: f.get('status'), period: f.get('period') }),
     del: () => data.deleteGoal(g.id),
     delMsg: () => `確定刪除目標「${g.title}」？掛在上面的任務不會被刪，只會取消關聯。`,
   });
@@ -292,6 +306,7 @@ export function mountProjects(root) {
         <button type="button" class="goal-row" data-goal="${g.id}">
           <span class="goal-title">${g.status === 'done' ? '✓ ' : ''}${esc(g.title)}</span>
           ${areaChip(state.areasById[g.area_id])}
+          ${g.period ? `<span class="sub">${data.periodLabel(g.period)}</span>` : ''}
           ${g.due_date ? `<span class="${overdue ? 'overdue' : 'sub'}">${overdue ? '已過期 ' : '期限 '}${formatShort(g.due_date)}</span>` : ''}
           <span class="sub">${data.GOAL_STATUS[g.status]}</span>
           ${progressHTML(pr)}

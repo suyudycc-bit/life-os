@@ -8,11 +8,18 @@ import { mountStats } from './views/stats.js';
 import { mountCalendar } from './views/calendar.js';
 import { mountReview } from './views/review.js';
 import { mountNotes } from './views/notes.js';
+import { mountMedia } from './views/media.js';
 import { mountHabits } from './views/habits.js';
 import { mountProjects } from './views/projects.js';
 import { mountBackup } from './views/backup.js';
 import { mountWorkBoard } from './views/workboard.js';
+import { mountGuide } from './views/guide.js';
+import { mountMonth } from './views/month.js';
+import { mountBucket } from './views/bucket.js';
+import { mountYear } from './views/year.js';
 import { formatClock, formatHMS } from './dates.js';
+import { pageEnter, watchStatNumbers } from './motion.js';
+import { initAccount, openForgotPassword, watchRecovery } from './account.js';
 
 // 左側選單 8 項（docs/00）；尚未實作的模組標示預計 Phase
 // 選單圖示：24×24、1.6 筆畫的線條圖（樣式見 .icon）
@@ -21,33 +28,46 @@ const ICONS = {
   tasks: '<path d="M5 5h4v4H5zM5 15h4v4H5z"/><path d="m6 7 1 1 2-2M12 7h7M12 17h7"/>',
   projects: '<path d="M4 7h16M4 12h10M4 17h6"/><path d="m16 15 2 2 3-4"/>',
   calendar: '<path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/><path d="M9 14.5h.01M13 14.5h.01M9 17.5h.01"/>',
+  // 年度手帳：3×3 的格子＝Year in Pixels
+  year: '<path d="M4 4h16v16H4z"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
   stats: '<path d="M12 4a8 8 0 1 0 8 8h-8z"/><path d="M15 3.5A6 6 0 0 1 20.5 9H15z"/>',
   review: '<path d="M5 19.5 6 15 16.5 4.5a2 2 0 0 1 3 3L9 18z"/><path d="M14.5 6.5l3 3"/>',
   notes: '<path d="M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3z"/><path d="M9.5 20h5"/>',
+  media: '<path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/><path d="M15 9.5h2.5M15 12.5h2.5"/>',
   habits: '<path d="M4 18c3-7 6-9 8-9s3 2 3 4-1 3-2 3-2-1-1-3 3-5 8-7"/>',
   workboard: '<path d="M4 4h16v16H4zM9.5 4v16M14.5 4v16"/><path d="M6 7.5h2M11 7.5h2M16 7.5h2M6 10.5h2M16 10.5h2"/>',
+  month: '<path d="M5 4h14v16H5z"/><path d="M8 4v16"/><path d="M11 8.5h5M11 12h5M11 15.5h3"/>',
+  bucket: '<path d="M6 4h12v16l-6-4-6 4z"/><path d="m9.5 9.5 2 2 3.5-3.5"/>',
   backup: '<path d="M8 4v13M4.5 13.5 8 17l3.5-3.5M16 20V7M12.5 10.5 16 7l3.5 3.5"/>',
+  guide: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z"/><path d="M9.7 9.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.6M12 16.6h.01"/>',
 };
 const icon = (id) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg>`;
 
 const ROUTES = [
-  { id: 'overview', label: '總覽', mount: mountOverview },
-  { id: 'tasks', label: '任務管理', mount: mountTasks, badge: true },
-  { id: 'workboard', label: '工作看板', mount: mountWorkBoard },
-  { id: 'projects', label: '專案與目標', mount: mountProjects },
-  { id: 'calendar', label: '日曆', mount: mountCalendar },
-  { id: 'stats', label: '時間統計', mount: mountStats },
-  { id: 'review', label: '每日復盤', mount: mountReview },
-  { id: 'notes', label: '靈感知識庫', mount: mountNotes },
-  { id: 'habits', label: '習慣養成', mount: mountHabits },
-  { id: 'backup', label: '數據與備份', mount: mountBackup },
+  // group：側欄分組（今天要做的 → 計畫 → 回顧 → 收藏 → 其他）
+  { id: 'overview', label: '總覽', mount: mountOverview, group: '今天' },
+  { id: 'tasks', label: '任務管理', mount: mountTasks, badge: true, group: '今天' },
+  { id: 'workboard', label: '工作看板', mount: mountWorkBoard, group: '今天' },
+  { id: 'projects', label: '專案與目標', mount: mountProjects, group: '計畫' },
+  { id: 'calendar', label: '日曆', mount: mountCalendar, group: '計畫' },
+  { id: 'month', label: '月度手帳', mount: mountMonth, group: '計畫' },
+  { id: 'year', label: '年度手帳', mount: mountYear, group: '計畫' },
+  { id: 'review', label: '每日復盤', mount: mountReview, group: '回顧' },
+  { id: 'stats', label: '時間統計', mount: mountStats, group: '回顧' },
+  { id: 'habits', label: '習慣養成', mount: mountHabits, group: '回顧' },
+  { id: 'notes', label: '靈感知識庫', mount: mountNotes, group: '收藏' },
+  { id: 'media', label: '書影單', mount: mountMedia, group: '收藏' },
+  { id: 'bucket', label: '想做清單', mount: mountBucket, group: '收藏' },
+  { id: 'backup', label: '數據與備份', mount: mountBackup, group: '其他' },
+  { id: 'guide', label: '使用說明', mount: mountGuide, group: '其他' },
 ];
 
 let unsubscribe = null;
 
 function renderNav() {
   const nav = $('#nav');
-  nav.innerHTML = ROUTES.map((r) => `
+  nav.innerHTML = ROUTES.map((r, i) => `
+    ${r.group !== ROUTES[i - 1]?.group ? `<div class="nav-group" aria-hidden="true"><span>${r.group}</span></div>` : ''}
     <a href="#/${r.id}" data-route="${r.id}" title="${r.label}">
       <span class="ico">${icon(r.id)}</span><span class="nav-label">${r.label}</span>
       ${r.badge ? '<span class="badge" id="nav-badge" hidden></span>' : ''}
@@ -97,7 +117,8 @@ setInterval(() => {
 }, 1000);
 
 function route() {
-  const id = location.hash.replace('#/', '') || 'overview';
+  // 「#/頁面/參數」只取第一段當頁面（例如 #/month/2026-10），參數由該頁自己讀 location.hash
+  const id = location.hash.replace('#/', '').split('/')[0] || 'overview';
   const r = ROUTES.find((x) => x.id === id) || ROUTES[0];
   document.querySelectorAll('#nav a').forEach((a) => {
     a.toggleAttribute('aria-current', a.dataset.route === r.id);
@@ -117,6 +138,7 @@ function route() {
       </section>`;
     unsubscribe = null;
   }
+  pageEnter(main); // 翻到新的一頁（motion.js；減少動態時不做）
   $('#app').classList.remove('nav-open');
 }
 
@@ -140,6 +162,7 @@ function showAuth(message = '') {
       ${isMock ? '<p class="warn">本機模擬模式：資料只存在這個瀏覽器。示範帳號 demo@lifeos.local／demo1234</p>' : ''}
       <label>Email<input type="email" name="email" required autocomplete="email"></label>
       <label>密碼<input type="password" name="password" required minlength="6" autocomplete="current-password"></label>
+      <button type="button" class="link-btn forgot-link" id="forgot-btn">忘記密碼？</button>
       <p class="form-msg" id="auth-msg" role="status">${esc(message)}</p>
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" id="signup-btn">註冊新帳號</button>
@@ -162,6 +185,7 @@ function showAuth(message = '') {
   };
   form.onsubmit = (e) => { e.preventDefault(); submit(data.signIn, '登入'); };
   $('#signup-btn').onclick = () => submit(data.signUp, '註冊');
+  $('#forgot-btn').onclick = () => openForgotPassword(form.email.value.trim());
 }
 
 let loadedFor = null;
@@ -200,6 +224,7 @@ function handleSession(session) {
 renderNav();
 subscribe(updateBadge);
 subscribe(updateRunningBar);
+watchStatNumbers($('#main'));
 window.addEventListener('hashchange', () => { if (loadedFor) route(); });
 $('#menu-btn').onclick = () => $('#app').classList.toggle('nav-open');
 
@@ -220,6 +245,7 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
   setSidebarCollapsed(!$('#app').classList.contains('sb-collapsed'));
 });
+initAccount();
 $('#signout-btn').onclick = async () => {
   try { await data.signOut(); } catch (e) { toast(e.message, true); }
 };
@@ -240,6 +266,8 @@ $('#signout-btn').onclick = async () => {
 if (!supabase) {
   showAuth();
 } else {
-  data.onAuthChange(handleSession);
-  handleSession(await data.getSession());
+  data.onAuthChange((session, event) => { handleSession(session); watchRecovery(session, event); });
+  const session = await data.getSession();
+  handleSession(session);
+  watchRecovery(session, 'INITIAL_SESSION');
 }
