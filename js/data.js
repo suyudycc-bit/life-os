@@ -762,6 +762,7 @@ export async function saveProject(p) {
 export async function saveGoal(g) {
   const row = { title: g.title?.trim(), area_id: g.area_id, due_date: g.due_date || null, status: g.status || 'active' };
   if ('period' in g) row.period = g.period || null; // Phase J：沒傳就不動，專案頁編輯目標不會清掉期間
+  if ('project_id' in g) row.project_id = g.project_id || null; // 20261106：沒傳就不動
   if (row.period && !isPeriod(row.period)) throw new Error('期間格式不正確');
   if (!row.title) throw new Error('請輸入目標');
   if (!row.area_id) throw new Error('請選擇領域');
@@ -1535,9 +1536,15 @@ export async function trashDelete(table, id) {
   payload.row = plain;
   for (const t of Object.keys(payload.cascade)) payload.cascade[t] = payload.cascade[t].map(({ user_id: _u, ...r }) => r);
   const label = String(spec.label(row) || '（未命名）').slice(0, 120);
-  must(await supabase.from('trash').insert({ table_name: table, row_id: id, label, payload }).select('id').single());
-  const rows = must(await supabase.from(table).delete().eq('id', id).select('id'));
-  if (rows.length !== 1) throw new Error(`預期刪除 1 筆，實際 ${rows.length} 筆`);
+  const tr = must(await supabase.from('trash').insert({ table_name: table, row_id: id, label, payload }).select('id').single());
+  try {
+    const rows = must(await supabase.from(table).delete().eq('id', id).select('id'));
+    if (rows.length !== 1) throw new Error(`預期刪除 1 筆，實際 ${rows.length} 筆`);
+  } catch (e) {
+    // 刪除沒成功：收回剛放進垃圾桶的那筆，免得垃圾桶有一筆其實還在的資料
+    await supabase.from('trash').delete().eq('id', tr.id);
+    throw e;
+  }
 }
 
 /** 垃圾桶清單（新到舊）；順便清掉超過 30 天的 */
@@ -1555,7 +1562,8 @@ export async function restoreTrash(trashId) {
   const { row, cascade = {}, setnull = {} } = t.payload;
   const exists = must(await supabase.from(t.table_name).select('id').eq('id', row.id).maybeSingle());
   if (exists) throw new Error('這筆資料已經存在，不需要還原');
-  must(await supabase.from(t.table_name).insert(row).select('id').single());
+  const fixed = await restoreFixRefs(t.table_name, row);
+  must(await supabase.from(t.table_name).insert(fixed.row).select('id').single());
   for (const [table, rows] of Object.entries(cascade)) {
     if (rows.length) must(await supabase.from(table).insert(rows).select('id'));
   }
@@ -1564,7 +1572,41 @@ export async function restoreTrash(trashId) {
     must(await supabase.from(table).update({ [col]: row.id }).in('id', ids).is(col, null).select('id'));
   }
   must(await supabase.from('trash').delete().eq('id', trashId).select('id'));
-  return t;
+  return { ...t, notes: fixed.notes };
+}
+
+// 還原前的檢查：可留白的關聯若已不存在就清空（並說明）；必填的領域不存在就停下；案件編號已被用掉就換新的
+const RESTORE_OPTIONAL_REFS = { project_id: ['projects', '專案'], goal_id: ['goals', '目標'], work_type_id: ['work_tags', '工作種類'],
+  work_project_tag_id: ['work_tags', '專案標籤'], note_id: ['notes', '靈感'], stage_id: ['contact_stages', '跟進階段'], task_id: ['tasks', '任務'],
+  habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'] };
+async function restoreFixRefs(table, original) {
+  const row = { ...original };
+  const notes = [];
+  if (row.area_id) {
+    const a = must(await supabase.from('areas').select('id').eq('id', row.area_id).maybeSingle());
+    if (!a) {
+      if (['tasks', 'time_entries', 'projects', 'goals'].includes(table)) throw new Error('原本的領域已經被刪除，請先新增一個領域並把這筆改掛過去（目前無法直接還原）');
+      row.area_id = null;
+      notes.push('原本的領域已刪除，改成沒有領域');
+    }
+  }
+  for (const [col, [ref, label]] of Object.entries(RESTORE_OPTIONAL_REFS)) {
+    if (!row[col] || ref === table) continue;
+    const hit = must(await supabase.from(ref).select('id').eq('id', row[col]).maybeSingle());
+    if (hit) continue;
+    if (['habit_logs', 'contact_logs', 'task_memos'].includes(table)) throw new Error(`原本的${label}已不存在，無法還原`);
+    row[col] = null;
+    notes.push(`原本的${label}已不存在，已取消關聯`);
+  }
+  if (table === 'tasks' && row.case_no) {
+    const dup = must(await supabase.from('tasks').select('id').eq('case_no', row.case_no).maybeSingle());
+    if (dup) {
+      const old = row.case_no;
+      row.case_no = nextCaseNo(await listTasks());
+      notes.push(`案件編號 ${old} 已被新的工作使用，改成 ${row.case_no}`);
+    }
+  }
+  return { row, notes };
 }
 /** 永久刪除（不能復原） */
 export async function purgeTrashItem(trashId) {
@@ -1626,7 +1668,8 @@ export function inboxSourceOf(url) {
 }
 /** 分享進來的文字常常「標題＋網址」混在一起：抽出第一個網址，其餘當內文 */
 export function splitSharedText(text) {
-  const m = String(text || '').match(/https?:\/\/[^\s<>"'）」]+/);
+  // 網址到空白或全形標點為止（小紅書等分享文字常在網址後直接接「，复制本条信息…」）
+  const m = String(text || '').match(/https?:\/\/[^\s<>"'）」，。！？、；：「『』【】（《》　]+/);
   const url = m ? m[0].replace(/[.,，。)]+$/, '') : null;
   const body = String(text || '').replace(m ? m[0] : '', ' ').replace(/[ \t]{2,}/g, ' ').trim() || null;
   return { url, body };
@@ -1845,15 +1888,7 @@ export function inboxCategories(items) {
  * 拆分享文字（包 splitSharedText）：小紅書等分享文字的網址後面常直接接全形標點（例如「…/AbCdEf，复制本条信息…」），
  * splitSharedText 只在空白處斷開，會把後面的中文吃進網址；這裡在第一個全形標點處截斷，剩下的放回內容。
  */
-export function inboxSplitShared(text) {
-  const r = splitSharedText(text);
-  const m = r.url?.match(/[，。！？、；：「」『』【】（）《》　]/);
-  if (!m) return r;
-  const tail = r.url.slice(m.index);
-  const url = r.url.slice(0, m.index).replace(/[.,]+$/, '');
-  const body = String(text || '').replace(r.url, ` ${tail}`).replace(/[ \t]{2,}/g, ' ').trim() || null;
-  return { url, body };
-}
+export const inboxSplitShared = (text) => splitSharedText(text); // 全形標點的截斷已併進 splitSharedText
 /** 同一個網址已經存過的那筆（避免手機重複分享時不知道） */
 export function inboxFindUrl(items, url) {
   if (!url) return null;
@@ -1908,8 +1943,10 @@ export async function tagAffected(scope, name) {
 }
 async function tagApply(s, changes) {
   let n = 0;
-  for (const { id, value } of changes) {
-    n += must(await supabase.from(s.table).update({ [s.col]: value }).eq('id', id).select('id')).length;
+  for (let i = 0; i < changes.length; i += 20) { // 每批 20 筆並行，避免數百筆逐一等待
+    const res = await Promise.all(changes.slice(i, i + 20).map(({ id, value }) =>
+      supabase.from(s.table).update({ [s.col]: value }).eq('id', id).select('id')));
+    n += res.reduce((k, r) => k + must(r).length, 0);
   }
   if (n !== changes.length) throw new Error(`預期更新 ${changes.length} 筆，實際 ${n} 筆`);
   return n;
@@ -2028,11 +2065,7 @@ export async function tagDeleteArea(areaId, moveTo, areas) {
 // 目標掛在專案底下、習慣串接專案、連續 21 天鼓勵、CFA 規劃表（CSV）匯入。UI 只呼叫這裡。
 
 /** 儲存目標＋所屬專案（saveGoal 不碰 project_id，所以另外寫；沒傳 project_id 就不動） */
-export async function projectSaveGoal(g) {
-  const saved = await saveGoal(g);
-  if (!('project_id' in g) || (saved.project_id || null) === (g.project_id || null)) return saved;
-  return setGoalProject(saved.id, g.project_id);
-}
+export const projectSaveGoal = (g) => saveGoal(g); // saveGoal 已直接處理 project_id
 
 /** 新增／編輯習慣＋所屬專案與目標 */
 export async function projectSaveHabit(id, { name, area_id, target_per_week, project_id, goal_id }) {
@@ -2205,7 +2238,11 @@ export function cfaPlanImport(text, { projects, goals, tasks, areas, day = today
   const byDay = {};
   if (project) {
     for (const t of tasks) {
-      if (t.project_id === project.id && t.title.startsWith(CFA_PREFIX) && t.due_date && !byDay[t.due_date]) byDay[t.due_date] = t;
+      if (t.project_id !== project.id || !t.title.startsWith(CFA_PREFIX)) continue;
+      // 說明最後一行記著規劃表的原始日期；任務被拖到別天、遷移後仍認得是同一筆
+      const m = /由 CFA 規劃表匯入：(\d{4})\/(\d{2})\/(\d{2})/.exec(t.notes || '');
+      const key = m ? `${m[1]}-${m[2]}-${m[3]}` : t.due_date;
+      if (key && !byDay[key]) byDay[key] = t;
     }
   }
   const creates = [];

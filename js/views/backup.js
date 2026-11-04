@@ -209,9 +209,9 @@ export function mountBackup(root) {
     b.disabled = true;
     try {
       if (b.dataset.restore) {
-        await data.restoreTrash(t.id);
+        const r = await data.restoreTrash(t.id);
         await reloadAll(); // 還原後各頁（任務、專案、靈感…）看到的是同一份
-        toast(`已還原${kind}「${t.label}」`);
+        toast(`已還原${kind}「${t.label}」${r.notes?.length ? `（${r.notes.join('；')}）` : ''}`);
       } else {
         if (!(await confirmDialog(`永久刪除${kind}「${t.label}」？之後就不能還原了。`, '永久刪除'))) { b.disabled = false; return; }
         await data.purgeTrashItem(t.id);
