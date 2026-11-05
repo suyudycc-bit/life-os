@@ -2199,14 +2199,98 @@ function cfaRowTask(get, day, hours) {
   return { day, title, notes: lines.join('\n'), estimate_min: Math.round(hours * 60), stage, done: /✓|✔/.test(get('check')) };
 }
 
+// --- 規劃表匯入（20261107 起所有專案都能用；CFA 規劃表是其中一種格式，自動辨認）---
+// 通用格式欄位（依標題名稱找，順序不拘）：日期、任務（必要）；時數／預計分鐘、階段、說明、完成、優先級、編號（選填）。
+const PLAN_COLUMNS = {
+  date: (k) => ['日期', 'date'].includes(k),
+  title: (k) => ['任務', '任務名稱', '標題', '項目', '待辦', 'task', 'title'].includes(k),
+  hours: (k) => ['時數', '預計時數', '小時', 'hours'].includes(k),
+  minutes: (k) => ['預計分鐘', '分鐘', 'minutes'].includes(k),
+  stage: (k) => ['階段', '目標', 'stage', 'goal'].includes(k),
+  notes: (k) => ['說明', '備註', '內容', 'notes'].includes(k),
+  done: (k) => ['完成', '✅', 'done'].includes(k),
+  priority: (k) => ['優先級', '優先', 'priority'].includes(k),
+  ref: (k) => ['編號', 'id'].includes(k),
+};
+const planKey = (h) => cfaKey(h).toLowerCase();
+const PLAN_DONE = /^(✓|✔|✅|v|x|是|完成|已完成|done|true|yes|y|1)$/i;
+const PLAN_MARK = /由(?: CFA )?規劃表匯入：(\d{4})\/(\d{2})\/(\d{2})(?:・#([^・）]+))?/;
+
+/** 這份表是哪一種格式：有 Schweser 欄＋科目＝CFA 規劃表，其餘用通用欄位 */
+export function planFormat(header) {
+  const keys = header.map(cfaKey);
+  return keys.some((k) => /schweser/i.test(k)) && keys.includes('科目') ? 'cfa' : 'plan';
+}
+
+export function planColumns(header) {
+  const keys = header.map(planKey);
+  const cols = {};
+  for (const [name, test] of Object.entries(PLAN_COLUMNS)) {
+    const i = keys.findIndex((k) => k && test(k));
+    if (i >= 0) cols[name] = i;
+  }
+  const missing = [cols.date == null && '日期', cols.title == null && '任務'].filter(Boolean);
+  if (missing.length) throw new Error(`找不到欄位：${missing.join('、')}。第一列要是標題，至少要有「日期」和「任務」兩欄（可以下載範例檔對照）。`);
+  return cols;
+}
+
+/** 2026/11/4、2026-11-04、Excel 日期序號（45000 左右）→ 2026-11-04 */
+export function planDate(v) {
+  const s = String(v ?? '').trim();
+  if (/^\d{5}(\.\d+)?$/.test(s)) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(s)) * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  return cfaDate(s);
+}
+
+function planPriority(v) {
+  const s = String(v || '').trim();
+  if (/^(1|高|high)$/i.test(s)) return 1;
+  if (/^(3|低|low)$/i.test(s)) return 3;
+  return 2;
+}
+
+/** 一列 → 任務內容（通用格式）。key＝編號，沒有編號就用「日期＋任務名稱」 */
+function planRowTask(get, day) {
+  const title = cfaFirstLine(get('title')).slice(0, 200);
+  const ref = cfaFirstLine(get('ref'));
+  const hours = Number.parseFloat(String(get('hours')).replace(/[^\d.]/g, ''));
+  const minutes = Number.parseFloat(String(get('minutes')).replace(/[^\d.]/g, ''));
+  const estimate_min = minutes > 0 ? Math.round(minutes) : hours > 0 ? Math.round(hours * 60) : null;
+  const stage = cfaFirstLine(get('stage')) || null;
+  const body = cfaClean(get('notes'));
+  const mark = `（由規劃表匯入：${day.replaceAll('-', '/')}${ref ? `・#${ref}` : ''}${stage ? `・${stage}` : ''}）`;
+  return {
+    key: ref ? `#${ref}` : `${day}|${title}`, day, title, stage, estimate_min,
+    notes: body ? `${body}\n${mark}` : mark, priority: planPriority(get('priority')),
+    done: PLAN_DONE.test(String(get('done')).trim()) || /✓|✔/.test(get('done')),
+  };
+}
+
+/** 已存在的任務 → 比對用的 key（說明最後一行記著規劃表的原始日期／編號，任務被拖到別天仍認得） */
+function planTaskKey(t, format) {
+  const m = PLAN_MARK.exec(t.notes || '');
+  if (format === 'cfa') {
+    if (!t.title.startsWith(CFA_PREFIX)) return null;
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : t.due_date;
+  }
+  if (!m || /由 CFA 規劃表/.test(m[0])) return null;
+  return m[4] ? `#${m[4]}` : `${m[1]}-${m[2]}-${m[3]}|${t.title}`;
+}
+
 /**
- * 匯入預覽（不寫入）：只匯入今天以後（含今天）、時數 > 0、不是休息／緩衝／已重排的日子。
- * 同一個專案裡同一天的 CFA 任務視為同一筆 → 更新；已在 Life OS 完成的不改回未完成。
+ * 匯入預覽（不寫入）。rows：試算表的列（第一列是標題，見 sheet-file.js）。
+ * projectId：匯入到哪個已存在的專案；留空＝新建（名稱 newProjectName，CFA 格式預設「CFA 2027 Level I」）。
+ * 只匯入今天以後（含今天）的列，includePast 時也匯入以前的。同一筆（key 相同）→ 更新；已完成的不改回未完成。
  */
-export function cfaPlanImport(text, { projects, goals, tasks, areas, day = today() }) {
-  const rows = cfaParseCSV(text);
+export function sheetImportPlan(rows, { projects, goals, tasks, areas, projectId, newProjectName = '', includePast = false, day = today() }) {
+  rows = (rows || []).filter((r) => r.some((x) => String(x ?? '').trim() !== '')).map((r) => r.map((x) => String(x ?? '')));
   if (rows.length < 2) throw new Error('檔案裡沒有資料列');
-  const cols = cfaColumns(rows[0]);
+  const format = planFormat(rows[0]);
+  const cols = format === 'cfa' ? cfaColumns(rows[0]) : planColumns(rows[0]);
+  const used = new Set(Object.values(cols));
+  const unused = rows[0].map((h, i) => (used.has(i) ? '' : cfaFirstLine(h))).filter(Boolean);
   const skipped = {};
   const skip = (reason) => { skipped[reason] = (skipped[reason] || 0) + 1; };
   const stageEnd = {};
@@ -2214,59 +2298,79 @@ export function cfaPlanImport(text, { projects, goals, tasks, areas, day = today
   const seen = new Set();
   for (const r of rows.slice(1)) {
     const get = (k) => (cols[k] == null ? '' : r[cols[k]] || '');
-    const d = cfaDate(get('date'));
+    const d = planDate(get('date'));
     if (!d) { skip('不是日期列'); continue; }
-    const stageKey = CFA_STAGES.find((s) => s.test.test(get('stage')))?.key;
-    if (stageKey && (!stageEnd[stageKey] || d > stageEnd[stageKey])) stageEnd[stageKey] = d;
-    const hours = Number.parseFloat(String(get('hours')).replace(/[^\d.]/g, ''));
-    if (d < day) { skip('今天以前'); continue; }
-    if (CFA_SKIP_SUBJECT.test(get('subject'))) { skip('休息／緩衝／已重排'); continue; }
-    if (!(hours > 0)) { skip('沒有讀書時數'); continue; }
-    if (seen.has(d)) { skip('同一天重複的列'); continue; }
-    seen.add(d);
-    items.push(cfaRowTask(get, d, hours));
+    let it;
+    if (format === 'cfa') {
+      const stageKey = CFA_STAGES.find((s) => s.test.test(get('stage')))?.key;
+      if (stageKey && (!stageEnd[stageKey] || d > stageEnd[stageKey])) stageEnd[stageKey] = d;
+      const hours = Number.parseFloat(String(get('hours')).replace(/[^\d.]/g, ''));
+      if (d < day && !includePast) { skip('今天以前'); continue; }
+      if (CFA_SKIP_SUBJECT.test(get('subject'))) { skip('休息／緩衝／已重排'); continue; }
+      if (!(hours > 0)) { skip('沒有讀書時數'); continue; }
+      it = { ...cfaRowTask(get, d, hours), key: d, priority: 2 };
+    } else {
+      const stage = cfaFirstLine(get('stage'));
+      if (stage && (!stageEnd[stage] || d > stageEnd[stage])) stageEnd[stage] = d;
+      if (d < day && !includePast) { skip('今天以前'); continue; }
+      it = planRowTask(get, d);
+      if (!it.title) { skip('沒有任務名稱'); continue; }
+    }
+    if (seen.has(it.key)) { skip(format === 'cfa' ? '同一天重複的列' : '重複的列'); continue; }
+    seen.add(it.key);
+    items.push(it);
   }
 
-  const project = projects.find((p) => p.name.trim() === CFA_PROJECT_NAME) || null;
+  const project = projectId ? projects.find((p) => p.id === projectId) || null
+    : format === 'cfa' && projectId === undefined ? projects.find((p) => p.name.trim() === CFA_PROJECT_NAME) || null : null;
+  const projectName = project?.name || newProjectName.trim() || (format === 'cfa' ? CFA_PROJECT_NAME : '');
   const areaChoices = areas.filter((a) => !a.on_board);
-  const suggestedArea = project?.area_id || areaChoices.find((a) => a.name.includes('轉職'))?.id || null;
-  const goalPlan = CFA_STAGES.filter((s) => items.some((it) => it.stage === s.key)).map((s) => ({
+  const suggestedArea = project?.area_id || (format === 'cfa' ? areaChoices.find((a) => a.name.includes('轉職'))?.id : null) || null;
+  const stageList = format === 'cfa'
+    ? CFA_STAGES.map((s) => ({ key: s.key, title: s.title }))
+    : [...new Set(items.map((it) => it.stage).filter(Boolean))].map((s) => ({ key: s, title: s }));
+  const mine = project ? goals.filter((g) => g.project_id === project.id) : [];
+  const goalPlan = stageList.filter((s) => items.some((it) => it.stage === s.key)).map((s) => ({
     key: s.key, title: s.title, due_date: stageEnd[s.key] || null,
-    existing: project ? goals.find((g) => g.project_id === project.id && g.title.trim() === s.title) || null : null,
+    existing: mine.find((g) => g.title.trim() === s.title) || (format === 'plan' && mine.find((g) => g.title.trim().endsWith(s.title))) || null,
   }));
 
-  const byDay = {};
+  const byKey = {};
   if (project) {
     for (const t of tasks) {
-      if (t.project_id !== project.id || !t.title.startsWith(CFA_PREFIX)) continue;
-      // 說明最後一行記著規劃表的原始日期；任務被拖到別天、遷移後仍認得是同一筆
-      const m = /由 CFA 規劃表匯入：(\d{4})\/(\d{2})\/(\d{2})/.exec(t.notes || '');
-      const key = m ? `${m[1]}-${m[2]}-${m[3]}` : t.due_date;
-      if (key && !byDay[key]) byDay[key] = t;
+      if (t.project_id !== project.id) continue;
+      const key = planTaskKey(t, format);
+      if (key && !byKey[key]) byKey[key] = t;
     }
   }
   const creates = [];
   const updates = [];
   const unchanged = [];
   for (const it of items) {
-    const t = byDay[it.day];
+    const t = byKey[it.key];
     if (!t) { creates.push(it); continue; }
     const goal = goalPlan.find((g) => g.key === it.stage);
     const goalChanged = goal ? !goal.existing || t.goal_id !== goal.existing.id : Boolean(t.goal_id);
-    const changed = t.title !== it.title || (t.notes || '') !== it.notes || t.estimate_min !== it.estimate_min
-      || goalChanged || (it.done && t.status !== 'done');
-    (changed ? updates : unchanged).push({ ...it, task: t });
+    // 規劃表上的日期改了（和上次匯入記下的原始日期不同）才搬到期日；只在 Life OS 拖到別天的不動
+    const m = PLAN_MARK.exec(t.notes || '');
+    const moveDay = Boolean(m) && `${m[1]}-${m[2]}-${m[3]}` !== it.day && t.status !== 'done';
+    const changed = t.title !== it.title || (t.notes || '') !== it.notes || (t.estimate_min ?? null) !== (it.estimate_min ?? null)
+      || goalChanged || (it.done && t.status !== 'done') || moveDay;
+    (changed ? updates : unchanged).push({ ...it, task: t, moveDay });
   }
-  return { project, suggestedArea, areaChoices, goals: goalPlan, creates, updates, unchanged, skipped,
-    total: rows.length - 1, pushAhead: items.filter((it) => it.day <= addDays(day, 180)).length };
+  return { format, unused, project, projectName, suggestedArea, areaChoices, goals: goalPlan, creates, updates, unchanged, skipped,
+    total: rows.length - 1, pushAhead: items.filter((it) => it.day >= day && it.day <= addDays(day, 180)).length };
 }
 
-/** 依預覽寫入：專案 → 階段目標 → 任務（新增先建成待辦，✓ 的再標完成，completed_at 由觸發器寫） */
-export async function cfaRunImport(plan, { areaId } = {}) {
+/** 依預覽寫入：專案 → 階段目標 → 任務（新增先建成待辦，完成的再標完成，completed_at 由觸發器寫） */
+export async function sheetImportRun(plan, { areaId } = {}) {
   let project = plan.project;
   const area_id = project?.area_id || areaId;
   if (!area_id) throw new Error('請選擇領域');
-  if (!project) project = await saveProject({ name: CFA_PROJECT_NAME, area_id, status: 'active' });
+  if (!project) {
+    if (!plan.projectName) throw new Error('請輸入新專案的名稱');
+    project = await saveProject({ name: plan.projectName, area_id, status: 'active' });
+  }
   const goalIdOf = {};
   for (const g of plan.goals) {
     if (g.existing) {
@@ -2283,15 +2387,17 @@ export async function cfaRunImport(plan, { areaId } = {}) {
   let created = [];
   if (plan.creates.length) {
     created = must(await supabase.from('tasks').insert(plan.creates.map((it) => pickTask({
-      ...fields(it), area_id, project_id: project.id, due_date: it.day, status: 'todo', priority: 2,
-    }))).select('id, due_date'));
+      ...fields(it), area_id, project_id: project.id, due_date: it.day, status: 'todo', priority: it.priority || 2,
+    }))).select('id, due_date, title, notes'));
     if (created.length !== plan.creates.length) throw new Error(`預期新增 ${plan.creates.length} 筆，實際 ${created.length} 筆`);
   }
-  const idByDay = Object.fromEntries(created.map((t) => [t.due_date, t.id]));
+  const sig = (day, title, notes) => `${day}|${title}|${notes}`;
+  const idBySig = Object.fromEntries(created.map((t) => [sig(t.due_date, t.title, t.notes), t.id]));
   const writes = [
-    ...plan.updates.map((it) => ({ id: it.task.id, patch: { ...fields(it), ...(it.done && it.task.status !== 'done' ? { status: 'done' } : {}) } })),
-    ...plan.creates.filter((it) => it.done).map((it) => ({ id: idByDay[it.day], patch: { status: 'done' } })),
+    ...plan.updates.map((it) => ({ id: it.task.id, patch: { ...fields(it), ...(it.moveDay ? { due_date: it.day } : {}), ...(it.done && it.task.status !== 'done' ? { status: 'done' } : {}) } })),
+    ...plan.creates.filter((it) => it.done).map((it) => ({ id: idBySig[sig(it.day, it.title, it.notes)], patch: { status: 'done' } })),
   ];
+  if (writes.some((w) => !w.id)) throw new Error('新增的任務對不上，請重新整理後再匯入一次（已新增的不會重複）');
   let updated = 0;
   for (let i = 0; i < writes.length; i += 20) {
     const res = await Promise.all(writes.slice(i, i + 20).map((w) => supabase.from('tasks').update(pickTask(w.patch)).eq('id', w.id).select('id')));
@@ -2300,3 +2406,7 @@ export async function cfaRunImport(plan, { areaId } = {}) {
   if (updated !== writes.length) throw new Error(`預期更新 ${writes.length} 筆，實際 ${updated} 筆`);
   return { project, created: created.length, updated: plan.updates.length };
 }
+
+// 舊名稱（CFA 專用時期）保留給既有呼叫：CSV 文字 → 預覽／寫入
+export const cfaPlanImport = (text, ctx) => sheetImportPlan(cfaParseCSV(text), ctx);
+export const cfaRunImport = sheetImportRun;

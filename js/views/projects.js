@@ -6,6 +6,7 @@ import { formatShort, today, addDays, weekStart } from '../dates.js';
 import { enableReorder } from './tasks.js';
 import { openTaskEditor } from './task-actions.js';
 import { toggleHabitDay, streakBadge } from './habits.js';
+import { readSheetFile } from '../sheet-file.js';
 
 const VIEW_KEY = 'lifeos-pj-view';
 const ui = { status: 'active', view: 'cards', scale: 'week', withWork: false };
@@ -512,7 +513,7 @@ export function mountProjects(root) {
   return render;
 }
 
-// ===== CFA 規劃表匯入（20261106）：選 CSV → 預覽筆數 → 確認才寫入；解析與寫入都在 data.js =====
+// ===== 規劃表匯入（20261106 CFA；20261107 起所有專案都能用）：選檔 → 選專案 → 預覽筆數 → 確認才寫入；解析與寫入都在 data.js =====
 function cfaDialog() {
   let dlg = $('#cfa-dialog');
   if (!dlg) {
@@ -528,9 +529,11 @@ function openCfaImport() {
   const dlg = cfaDialog();
   dlg.innerHTML = `
     <form class="cfa-form">
-      <h2>匯入 CFA 規劃表</h2>
-      <p class="sub">在 Google 試算表打開「CFA 2027｜每日進度與下一步」→ 切到「每日進度」分頁 →「檔案 → 下載 → 逗號分隔值（.csv）」，再選這個檔案。</p>
-      <label>CSV 檔案<input type="file" name="file" accept=".csv,text/csv" required></label>
+      <h2>匯入規劃表</h2>
+      <p class="sub">把一份「每天要做什麼」的規劃表（Excel .xlsx 或 CSV）匯入成某個專案的任務。第一列是標題，至少要有「日期」「任務」兩欄；選填「時數」或「預計分鐘」「階段」「說明」「完成」「優先級」「編號」。
+        範例：<a href="samples/plan-template.xlsx" download>Excel 範例</a>・<a href="samples/plan-template.csv" download>CSV 範例</a>。CFA 規劃表（Google 試算表「每日進度」分頁下載成 CSV 或 .xlsx）也可以直接匯入。</p>
+      <label>規劃表檔案<input type="file" name="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required></label>
+      <div id="cfa-target"></div>
       <div id="cfa-preview" aria-live="polite"></div>
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" data-cancel>取消</button>
@@ -538,27 +541,54 @@ function openCfaImport() {
       </div>
     </form>`;
   const form = $('form', dlg);
+  const target = $('#cfa-target', dlg);
   const preview = $('#cfa-preview', dlg);
   const go = $('#cfa-go', dlg);
+  let rows = null;
+  let fileBase = '';
   let plan = null;
   $('[data-cancel]', dlg).onclick = () => dlg.close();
 
-  form.file.onchange = async () => {
-    plan = null;
-    go.disabled = true;
-    const file = form.file.files[0];
-    if (!file) { preview.innerHTML = ''; return; }
+  // 匯入到哪個專案：已存在的專案，或新建（名稱預設＝檔名）
+  const renderTarget = (format) => {
+    const cfa = format === 'cfa' && state.projects.find((p) => p.name.trim() === data.CFA_PROJECT_NAME);
+    const byName = state.projects.find((p) => p.name.trim() === fileBase);
+    const sel = (cfa || byName)?.id || '';
+    const list = [...state.projects].filter((p) => p.status !== 'done' || p.id === sel).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    target.innerHTML = `
+      <div class="row">
+        <label>匯入到專案<select name="project_id">
+          <option value="">＋ 新建專案</option>
+          ${list.map((p) => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.status === 'done' ? '（已完成）' : ''}</option>`).join('')}
+        </select></label>
+        <label class="pj-newname" ${sel ? 'hidden' : ''}>新專案名稱<input name="new_name" maxlength="120" value="${esc(format === 'cfa' ? data.CFA_PROJECT_NAME : fileBase)}"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="include_past"> 也匯入今天以前的列（預設只匯入今天以後）</label>`;
+    form.project_id.onchange = () => { $('.pj-newname', target).hidden = Boolean(form.project_id.value); replan(); };
+    form.new_name.oninput = () => replan(true);
+    form.include_past.onchange = () => replan();
+  };
+
+  const replan = (nameOnly = false) => {
+    if (!rows) return;
+    const keepArea = form.area_id?.value;
     try {
-      plan = data.cfaPlanImport(await file.text(), { projects: state.projects, goals: state.goals, tasks: state.tasks, areas: state.areas });
+      plan = data.sheetImportPlan(rows, {
+        projects: state.projects, goals: state.goals, tasks: state.tasks, areas: state.areas,
+        projectId: form.project_id.value || null, newProjectName: form.new_name.value, includePast: form.include_past.checked,
+      });
     } catch (err) {
+      plan = null;
+      go.disabled = true;
       preview.innerHTML = `<p class="warn">${esc(err.message)}</p>`;
       return;
     }
+    if (nameOnly && $('.cfa-sum', preview)) { $('#cfa-pjname', preview).textContent = plan.projectName || '（請輸入名稱）'; syncGo(); return; }
     const writes = plan.creates.length + plan.updates.length;
     const skipped = Object.entries(plan.skipped);
-    const areaPick = plan.project ? '' : `<label>領域<select name="area_id" required>
+    const areaPick = plan.project ? '' : `<label>新專案的領域<select name="area_id" required>
         ${plan.suggestedArea ? '' : '<option value="">請選擇領域</option>'}
-        ${plan.areaChoices.map((a) => `<option value="${a.id}" ${a.id === plan.suggestedArea ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>`;
+        ${plan.areaChoices.map((a) => `<option value="${a.id}" ${a.id === (keepArea || plan.suggestedArea) ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label>`;
     preview.innerHTML = `
       <div class="cfa-sum">
         <div><b>${plan.creates.length}</b><span>新增</span></div>
@@ -566,30 +596,56 @@ function openCfaImport() {
         <div><b>${plan.unchanged.length}</b><span>已是最新</span></div>
         <div><b>${skipped.reduce((n, [, c]) => n + c, 0)}</b><span>略過</span></div>
       </div>
-      ${skipped.length ? `<p class="sub">略過的原因：${skipped.map(([r, c]) => `${esc(r)} ${c} 列`).join('、')}（只匯入今天以後、有讀書時數的日子）</p>` : ''}
-      <p class="sub">專案：<b>${esc(data.CFA_PROJECT_NAME)}</b>${plan.project ? '（已存在，沿用）' : '（會新建）'}</p>
+      ${skipped.length ? `<p class="sub">略過的原因：${skipped.map(([r, c]) => `${esc(r)} ${c} 列`).join('、')}</p>` : ''}
+      <p class="sub">格式：${plan.format === 'cfa' ? 'CFA 規劃表' : '通用規劃表'}・專案：<b id="cfa-pjname">${esc(plan.projectName || '（請輸入名稱）')}</b>${plan.project ? '（已存在，沿用）' : '（會新建）'}</p>
+      ${plan.format === 'plan' && plan.unused.length ? `<p class="sub">沒有用到的欄位：${plan.unused.map(esc).join('、')}（需要的話，把內容併到「說明」欄）</p>` : ''}
       ${areaPick}
-      ${plan.goals.length ? `<ul class="cfa-goals">${plan.goals.map((g) => `<li>◆ ${esc(g.title)}・期限 ${g.due_date ? g.due_date.replaceAll('-', '/') : '—'}・${g.existing ? '沿用' : '新增'}</li>`).join('')}</ul>` : ''}
+      ${plan.goals.length ? `<ul class="cfa-goals">${plan.goals.map((g) => `<li>◆ ${esc(g.title)}・期限 ${g.due_date ? g.due_date.replaceAll('-', '/') : '—'}・${g.existing ? '沿用' : '新增目標'}</li>`).join('')}</ul>` : ''}
       ${writes ? `<ul class="cfa-rows">${[...plan.creates.map((it) => ['新增', it]), ...plan.updates.map((it) => ['更新', it])].slice(0, 8)
         .map(([k, it]) => `<li><span class="cfa-k">${k}</span><span class="sub">${formatShort(it.day)}</span> ${esc(it.title)}${it.done ? ' ✓' : ''}</li>`).join('')}
         ${writes > 8 ? `<li class="sub">…還有 ${writes - 8} 筆</li>` : ''}</ul>` : '<p class="sub">沒有需要寫入的內容。</p>'}
       ${plan.pushAhead ? `<p class="cfa-note">這些任務都有到期日。如果有開「寫入 Google 日曆」，未來 180 天內的 ${plan.pushAhead} 筆會同步到 Google 的「Life OS」日曆。</p>` : ''}
-      <p class="sub">同一天的 CFA 任務會更新標題、說明、預計時間與目標，不會重複建立；已在 Life OS 標完成的不會被改回未完成。</p>`;
-    go.disabled = !writes;
+      <p class="sub">${plan.format === 'cfa' ? '同一天的 CFA 任務' : '同一個編號（沒有編號時＝同一天、同名稱）的任務'}會更新標題、說明、預計時間與目標，不會重複建立；已在 Life OS 標完成的不會被改回未完成。「階段」欄的每個值會變成這個專案的一個目標，期限＝該階段最後一天。</p>`;
+    syncGo();
+  };
+  const syncGo = () => {
+    const writes = plan ? plan.creates.length + plan.updates.length : 0;
+    go.disabled = !writes || (!plan.project && !plan.projectName);
     go.textContent = writes ? `匯入 ${writes} 筆` : '匯入';
+  };
+
+  form.file.onchange = async () => {
+    rows = null;
+    plan = null;
+    go.disabled = true;
+    target.innerHTML = '';
+    const file = form.file.files[0];
+    if (!file) { preview.innerHTML = ''; return; }
+    fileBase = file.name.replace(/\.[^.]+$/, '').trim();
+    try {
+      rows = await readSheetFile(file);
+      if (!rows.length) throw new Error('檔案裡沒有資料列');
+    } catch (err) {
+      rows = null;
+      preview.innerHTML = `<p class="warn">${esc(err.message)}</p>`;
+      return;
+    }
+    renderTarget(data.planFormat(rows[0]));
+    replan();
   };
 
   form.onsubmit = async (e) => {
     e.preventDefault();
     if (!plan) return;
     const writes = plan.creates.length + plan.updates.length;
-    if (!(await confirmDialog(`確定寫入？新增 ${plan.creates.length} 筆、更新 ${plan.updates.length} 筆任務${plan.goals.some((g) => !g.existing) ? `，新增 ${plan.goals.filter((g) => !g.existing).length} 個階段目標` : ''}。`, `寫入 ${writes} 筆`))) return;
+    const newGoals = plan.goals.filter((g) => !g.existing).length;
+    if (!(await confirmDialog(`確定寫入「${plan.projectName}」？${plan.project ? '' : '（新建專案）'}新增 ${plan.creates.length} 筆、更新 ${plan.updates.length} 筆任務${newGoals ? `，新增 ${newGoals} 個階段目標` : ''}。`, `寫入 ${writes} 筆`))) return;
     go.disabled = true;
     try {
-      const res = await data.cfaRunImport(plan, { areaId: form.area_id?.value });
+      const res = await data.sheetImportRun(plan, { areaId: form.area_id?.value });
       dlg.close();
       await refreshProjects();
-      toast(`已匯入：新增 ${res.created} 筆、更新 ${res.updated} 筆`);
+      toast(`已匯入「${res.project.name}」：新增 ${res.created} 筆、更新 ${res.updated} 筆`);
     } catch (err) {
       go.disabled = false;
       toast(err.message, true);

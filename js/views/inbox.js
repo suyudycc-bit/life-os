@@ -287,10 +287,10 @@ export function mountInbox(root) {
         <p>iPhone 的 Safari 不能把網頁設成分享對象，所以用內建的「捷徑」App 做一個「存到 Life OS」，之後在 Threads、小紅書、IG 按分享就能選它。</p>
         <ol>
           <li>打開「捷徑」App，按右上角 ＋ 新增捷徑，命名「存到 Life OS」。</li>
-          <li>在捷徑的詳細資訊打開「在分享表單中顯示」，接收類型只留「URL」和「文字」。</li>
-          <li>加入「URL 編碼」動作，對象選「捷徑輸入」。</li>
-          <li>加入「文字」動作，內容填下面這串，最後接上「URL 編碼」的結果：<code class="ib-code">${esc(share)}</code></li>
-          <li>加入「打開 URL」動作，對象選上一步的「文字」。</li>
+          <li>在捷徑的詳細資訊（ⓘ）打開「在分享表單中顯示」（Show in Share Sheet），接收類型只留「URL」和「文字」。</li>
+          <li>加入「URL 編碼」（URL Encode）動作，對象選「捷徑輸入」（Shortcut Input）。</li>
+          <li>加入「文字」（Text）動作，內容填下面這串，最後接上藍色變數「URL 編碼文字」（URL Encoded Text）：<code class="ib-code">${esc(share)}</code></li>
+          <li>加入「打開 URL」（Open URLs）動作，對象選上一步的「文字」。不需要 Get Headers／Get Contents of URL。</li>
         </ol>
         <p class="sub">之後在 App 裡按「分享」→ 找到「存到 Life OS」→ 會打開 Life OS 並跳出「存到收件匣」，選分類後按存。還沒登入的話，登入後會接著跳出來。動作名稱以你手機上顯示的為準（完整步驟見 docs/12-ios-share-shortcut.md）。</p>
         <p class="sub">Threads、IG、小紅書的網頁不允許其他網站讀取內容，所以不會自動抓標題或縮圖，以分享時帶進來的文字為準。</p>
