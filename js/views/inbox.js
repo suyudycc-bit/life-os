@@ -9,7 +9,8 @@ const FILTER_KEY = 'lifeos-inbox-filter';
 const PENDING_KEY = 'lifeos-inbox-share'; // 未登入時先記住分享（sessionStorage），登入後繼續
 const TABS = { unread: '未看', opened: '已點開', done: '已處理' };
 // 來源圖示：手帳上的小圓章（不用各平台的商標）
-const SOURCE_MARK = { threads: '@', instagram: 'IG', xiaohongshu: '紅', youtube: '▶', facebook: 'f', web: '網', other: '記' };
+const SOURCE_MARK = { threads: '@', instagram: 'IG', xiaohongshu: '紅', youtube: '▶', facebook: 'f', x: 'X', linkedin: 'in',
+  tiktok: '抖', podcast: '聽', dcard: 'D', ptt: 'P', vocus: '方', medium: 'M', web: '網', other: '記' };
 
 /** 頁面篩選記在這台裝置；總覽的提醒點進來時先設成「未看」 */
 export function saveInboxFilter(f) {
@@ -88,6 +89,7 @@ export function mountInbox(root) {
           <input name="category" list="ib-cats" placeholder="分類（可自己打）" aria-label="分類" maxlength="30">
           <button class="btn-primary">存入</button>
         </div>
+        <p class="ib-src-line" id="ib-add-src" hidden>來源：<b></b><span class="sub">（從網址自動判斷）</span></p>
       </form>
       <datalist id="ib-cats"></datalist>
       <div class="filters ib-filters">
@@ -106,9 +108,17 @@ export function mountInbox(root) {
       const dup = data.inboxFindUrl(items, url);
       await data.saveInboxItem({ url, body, category: form.category.value });
       form.text.value = '';
+      $('#ib-add-src', root).hidden = true;
       await load();
       toast(dup ? '已存入（這個連結之前也存過一次）' : '已存入收件匣');
     } catch (err) { toast(err.message, true); }
+  });
+  // 貼上時馬上顯示從網址判斷出的來源
+  form.text.addEventListener('input', () => {
+    const { url } = data.inboxSplitShared(form.text.value);
+    const line = $('#ib-add-src', root);
+    line.hidden = !url;
+    if (url) $('b', line).textContent = data.INBOX_SOURCES[data.inboxSourceOf(url)];
   });
   // 在輸入框按 Enter 直接存（Shift+Enter 換行）
   form.text.addEventListener('keydown', (e) => {
@@ -318,6 +328,7 @@ export function mountInbox(root) {
   }
 
   function itemHTML(it, staleIds) {
+    const src = data.inboxSourceOfItem(it);
     const stale = staleIds.has(it.id);
     const age = data.inboxAgeDays(it);
     // 沒有標題和內容時，用去掉 https:// 的網址當標題（網域另外列在下面）
@@ -326,7 +337,7 @@ export function mountInbox(root) {
     const tab = data.inboxTabOf(it);
     return `
       <li class="ib-item${stale ? ' is-stale' : ''}${tab === 'done' ? ' is-done' : ''}" data-id="${it.id}">
-        <span class="ib-mark ib-src-${esc(it.source)}" title="${esc(data.INBOX_SOURCES[it.source] || '其他')}" aria-label="來源：${esc(data.INBOX_SOURCES[it.source] || '其他')}">${SOURCE_MARK[it.source] || '記'}</span>
+        <span class="ib-mark ib-src-${src}" title="${esc(data.INBOX_SOURCES[src])}" aria-label="來源：${esc(data.INBOX_SOURCES[src])}">${SOURCE_MARK[src] || '記'}</span>
         <div class="ib-main">
           ${it.url
             ? `<a class="ib-open ib-text" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${esc(text || domain)}</a>`
@@ -362,7 +373,7 @@ export function mountInbox(root) {
       `<button type="button" data-v="${k}" aria-pressed="${ui.tab === k}">${label} <small>${counts[k]}</small></button>`).join('');
 
     const inTab = items.filter((it) => data.inboxTabOf(it) === ui.tab);
-    const sources = Object.keys(data.INBOX_SOURCES).filter((s) => items.some((it) => it.source === s));
+    const sources = Object.keys(data.INBOX_SOURCES).filter((s) => items.some((it) => data.inboxSourceOfItem(it) === s));
     if (ui.source && !sources.includes(ui.source)) ui.source = '';
     $('#ib-sources', root).innerHTML = sources.length > 1 ? ['', ...sources].map((s) =>
       `<button type="button" data-v="${s}" aria-pressed="${ui.source === s}">${s ? `<span class="ib-mark sm ib-src-${s}" aria-hidden="true">${SOURCE_MARK[s]}</span>${esc(data.INBOX_SOURCES[s])}` : '全部來源'}</button>`).join('') : '';
@@ -372,7 +383,7 @@ export function mountInbox(root) {
       `<button type="button" data-v="${esc(c)}" aria-pressed="${ui.cat === c}">${c ? esc(c) : '全部分類'}</button>`).join('') : '';
     $('#ib-cats', root).innerHTML = cats.map((c) => `<option value="${esc(c)}"></option>`).join('');
 
-    const shown = inTab.filter((it) => (!ui.source || it.source === ui.source) && (!ui.cat || it.category === ui.cat));
+    const shown = inTab.filter((it) => (!ui.source || data.inboxSourceOfItem(it) === ui.source) && (!ui.cat || it.category === ui.cat));
     // 未看：放很久的排最前面（最舊的先），其他新到舊
     if (ui.tab === 'unread') shown.sort((a, b) => (staleIds.has(b.id) - staleIds.has(a.id)) || (staleIds.has(a.id) ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)));
     $('#ib-list', root).innerHTML = shown.length ? shown.map((it) => itemHTML(it, staleIds)).join('')

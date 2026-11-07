@@ -151,7 +151,7 @@ export function mountGuide(root) {
       </section>
       <section class="card guide-sec" id="g-inbox">
         <h2>收件匣</h2>
-        <p>在 Threads、小紅書、IG 看到想研究的內容，先丟進收件匣，有空再看。上方分成「未看／已點開／已處理」（帶數量），可以再依來源（從網址自動判斷：Threads、IG、小紅書、YouTube、Facebook、其他網頁）和你自己打的分類篩選；篩選會記在這台裝置上。</p>
+        <p>在 Threads、小紅書、IG 看到想研究的內容，先丟進收件匣，有空再看。上方分成「未看／已點開／已處理」（帶數量），可以再依來源（從網址自動判斷：Threads、IG、小紅書、YouTube、Facebook、X、LinkedIn、TikTok／抖音、Podcast、Dcard、PTT、方格子、Medium，其他都算「網頁」；貼上網址時輸入框下方就會顯示判斷結果）和你自己打的分類篩選；篩選會記在這台裝置上。</p>
         <ul>
           <li><b>存進來</b>：在上方貼上網址或分享的文字（標題和網址混在一起也可以，會自動把網址拆出來），可順手填分類，按 Enter 或「存入」。</li>
           <li><b>從 iPhone 分享</b>：先照頁首「如何從手機分享進來」做一個「存到 Life OS」捷徑；之後在 App 裡按分享、選它，就會打開 Life OS 並跳出「存到收件匣」，選分類後存檔。還沒登入的話，登入後會接著跳出來；存過的連結再分享一次會提醒你。</li>

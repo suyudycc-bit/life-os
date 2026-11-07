@@ -69,8 +69,9 @@ export function authErrorText(msg = '', invalidCredentials = 'Email 或密碼錯
 
 // ===== 領域 =====
 export const DEFAULT_AREAS = [
-  { name: '工作／BD／轉譯組', kind: 'work', color: '#3b6fd8', sort: 1 },
-  { name: '轉職與職涯', kind: 'career', color: '#8a5cd6', sort: 2 },
+  // 20261105：開放給其他人用，新帳號的預設改成通用名稱（舊帳號已有領域，不受影響）；工作預設列入工作看板
+  { name: '工作', kind: 'work', color: '#3b6fd8', sort: 1, on_board: true },
+  { name: '職涯與學習', kind: 'career', color: '#8a5cd6', sort: 2 },
   { name: '副業與接案', kind: 'side', color: '#e08a2e', sort: 3 },
   { name: '健康與習慣', kind: 'health', color: '#2f9e6b', sort: 4 },
 ];
@@ -1654,18 +1655,33 @@ export const STREAK_MILESTONE = 21;
 
 // --- 收件匣 ---
 export const INBOX_STALE_DAYS = 7; // 使用者決定：7 天沒點開算「放很久」
-export const INBOX_SOURCES = { threads: 'Threads', instagram: 'IG', xiaohongshu: '小紅書', youtube: 'YouTube', facebook: 'Facebook', web: '網頁', other: '其他' };
+export const INBOX_SOURCES = { threads: 'Threads', instagram: 'IG', xiaohongshu: '小紅書', youtube: 'YouTube', facebook: 'Facebook',
+  x: 'X', linkedin: 'LinkedIn', tiktok: 'TikTok／抖音', podcast: 'Podcast', dcard: 'Dcard', ptt: 'PTT', vocus: '方格子', medium: 'Medium',
+  web: '網頁', other: '其他' };
+// 網域（含子網域、短網址）→ 來源；沒對到的一律「網頁」
+const INBOX_HOSTS = [
+  ['threads', /(^|\.)threads\.(net|com)$/],
+  ['instagram', /(^|\.)(instagram\.com|instagr\.am)$/],
+  ['xiaohongshu', /(^|\.)(xiaohongshu\.com|xhslink\.com)$/],
+  ['youtube', /(^|\.)(youtube\.com|youtu\.be)$/],
+  ['facebook', /(^|\.)(facebook\.com|fb\.com|fb\.watch|fb\.me)$/],
+  ['x', /(^|\.)(x\.com|twitter\.com|t\.co)$/],
+  ['linkedin', /(^|\.)(linkedin\.com|lnkd\.in)$/],
+  ['tiktok', /(^|\.)(tiktok\.com|douyin\.com)$/],
+  ['podcast', /(^|\.)(podcasts\.apple\.com|open\.spotify\.com|spotify\.link|soundon\.fm|firstory\.me)$/],
+  ['dcard', /(^|\.)dcard\.tw$/],
+  ['ptt', /(^|\.)(ptt\.cc|pttweb\.cc)$/],
+  ['vocus', /(^|\.)vocus\.cc$/],
+  ['medium', /(^|\.)medium\.com$/],
+];
 /** 從網址判斷來源 */
 export function inboxSourceOf(url) {
   let h = '';
-  try { h = new URL(url).hostname.replace(/^www\./, ''); } catch { return 'other'; }
-  if (/(^|\.)threads\.(net|com)$/.test(h)) return 'threads';
-  if (/(^|\.)instagram\.com$/.test(h)) return 'instagram';
-  if (/(^|\.)(xiaohongshu\.com|xhslink\.com)$/.test(h)) return 'xiaohongshu';
-  if (/(^|\.)(youtube\.com|youtu\.be)$/.test(h)) return 'youtube';
-  if (/(^|\.)(facebook\.com|fb\.watch)$/.test(h)) return 'facebook';
-  return 'web';
+  try { h = new URL(url).hostname.replace(/^www\./, '').toLowerCase(); } catch { return 'other'; }
+  return INBOX_HOSTS.find(([, re]) => re.test(h))?.[0] || 'web';
 }
+/** 畫面上用的來源：有網址就以網址為準（舊資料、規則更新前存的也會跟著對），沒網址才用存的值 */
+export const inboxSourceOfItem = (it) => (it.url ? inboxSourceOf(it.url) : INBOX_SOURCES[it.source] ? it.source : 'other');
 /** 分享進來的文字常常「標題＋網址」混在一起：抽出第一個網址，其餘當內文 */
 export function splitSharedText(text) {
   // 網址到空白或全形標點為止（小紅書等分享文字常在網址後直接接「，复制本条信息…」）
@@ -1684,8 +1700,11 @@ export async function saveInboxItem(it) {
   if (!row.url && !row.title && !row.body) throw new Error('請貼上連結或寫一點內容');
   row.source = it.source || (row.url ? inboxSourceOf(row.url) : 'other');
   if (!INBOX_SOURCES[row.source]) throw new Error('來源不正確');
-  if (it.id) return must(await supabase.from('inbox_items').update(row).eq('id', it.id).select().single());
-  return must(await supabase.from('inbox_items').insert(row).select().single());
+  const write = (r) => (it.id ? supabase.from('inbox_items').update(r).eq('id', it.id) : supabase.from('inbox_items').insert(r)).select().single();
+  let res = await write(row);
+  // 資料庫還沒跑 migration 20261107（來源只允許舊的 7 種）時，先存成「網頁」；畫面仍依網址顯示正確來源
+  if (res.error?.code === '23514' && /source/.test(res.error.message || '')) res = await write({ ...row, source: row.url ? 'web' : 'other' });
+  return must(res);
 }
 /** 點開時記第一次點開的時間 */
 export async function markInboxOpened(it) {
@@ -2325,7 +2344,7 @@ export function sheetImportPlan(rows, { projects, goals, tasks, areas, projectId
     : format === 'cfa' && projectId === undefined ? projects.find((p) => p.name.trim() === CFA_PROJECT_NAME) || null : null;
   const projectName = project?.name || newProjectName.trim() || (format === 'cfa' ? CFA_PROJECT_NAME : '');
   const areaChoices = areas.filter((a) => !a.on_board);
-  const suggestedArea = project?.area_id || (format === 'cfa' ? areaChoices.find((a) => a.name.includes('轉職'))?.id : null) || null;
+  const suggestedArea = project?.area_id || (format === 'cfa' ? (areaChoices.find((a) => a.name.includes('轉職')) || areaChoices.find((a) => a.kind === 'career'))?.id : null) || null;
   const stageList = format === 'cfa'
     ? CFA_STAGES.map((s) => ({ key: s.key, title: s.title }))
     : [...new Set(items.map((it) => it.stage).filter(Boolean))].map((s) => ({ key: s, title: s }));

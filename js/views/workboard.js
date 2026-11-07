@@ -153,7 +153,7 @@ export function mountWorkBoard(root) {
       <div><h1>工作看板</h1><p class="sub" id="wb-date"></p></div>
       <div class="cal-tools">
         <div class="seg" role="group" aria-label="切換看板">
-          <button type="button" data-mode="board">TY工作看板</button>
+          <button type="button" data-mode="board">看板</button>
           <button type="button" data-mode="cases">案件總覽</button>
           ${BOARD_URL ? '<button type="button" data-mode="legacy">舊看板</button>' : ''}
         </div>

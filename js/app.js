@@ -250,12 +250,23 @@ function showAuth(message = '') {
         msg.textContent = '註冊成功，請到信箱點確認連結後再登入。';
       }
     } catch (e) {
-      msg.textContent = e.message === 'Invalid login credentials' ? 'Email 或密碼錯誤' : e.message;
+      msg.textContent = authErrorText(e.message);
     }
   };
   form.onsubmit = (e) => { e.preventDefault(); submit(data.signIn, '登入'); };
   $('#signup-btn').onclick = () => submit(data.signUp, '註冊');
   $('#forgot-btn').onclick = () => openForgotPassword(form.email.value.trim());
+}
+
+/** Supabase 登入／註冊的英文錯誤轉成中文（開放給其他人用時，關閉註冊、未確認信箱最常見） */
+function authErrorText(m = '') {
+  const s = m.toLowerCase();
+  if (s === 'invalid login credentials') return 'Email 或密碼錯誤';
+  if (s.includes('signups not allowed') || s.includes('signup is disabled')) return '目前不開放自行註冊，請向管理者索取邀請。';
+  if (s.includes('email not confirmed')) return 'Email 還沒確認，請到信箱點確認連結（找不到信請看垃圾郵件）。';
+  if (s.includes('already registered')) return '這個 Email 已經註冊過，請直接登入或使用「忘記密碼？」。';
+  if (s.includes('rate limit')) return '寄信次數太多，請稍後再試。';
+  return m;
 }
 
 let loadedFor = null;
