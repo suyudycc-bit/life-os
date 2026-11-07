@@ -547,7 +547,12 @@ dialog p { margin: 0; }
 .pj-card h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
 .pj-next { background: var(--hl); border-radius: 2px; padding: 8px 10px; font-size: 14px; box-shadow: 0 1px 3px rgba(60, 50, 0, .15); }
 .pj-next.empty { color: var(--sub); }
-.pj-next label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.pj-next-row { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.pj-next-title {
+  border: 0; background: none; padding: 0 4px; margin: 0 -4px; border-radius: 6px; font: inherit; color: inherit;
+  text-align: left; cursor: pointer; min-width: 0; overflow-wrap: anywhere;
+}
+.pj-next-title:hover { background: rgba(0, 0, 0, .05); }
 .pj-next input { margin-top: 3px; accent-color: var(--accent); }
 .pj-progress { display: flex; align-items: center; gap: 10px; }
 .pj-progress .progress-bar { flex: 1; height: 8px; }

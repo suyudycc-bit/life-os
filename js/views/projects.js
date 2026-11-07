@@ -357,7 +357,9 @@ export function mountProjects(root) {
         <div class="task-meta">${areaChip(state.areasById[p.area_id])}<span>${data.PROJECT_STATUS[p.status]}</span></div>
         <div class="pj-next ${step ? '' : 'empty'}">
           ${step
-            ? `<label><input type="checkbox" class="pj-next-done" ${step.kind === 'task' ? `data-task="${step.task.id}"` : ''} aria-label="下一步完成"><span><b>下一步：</b>${esc(step.kind === 'task' ? step.task.title : step.text)}${step.kind === 'task' && step.task.due_date ? ` <span class="sub">${formatShort(step.task.due_date)}</span>` : ''}</span></label>`
+            // 只有勾選框會完成；點文字＝開編輯（任務開任務編輯，手寫的開專案編輯）
+            ? `<div class="pj-next-row"><input type="checkbox" class="pj-next-done" ${step.kind === 'task' ? `data-task="${step.task.id}"` : ''} aria-label="下一步完成：${esc(step.kind === 'task' ? step.task.title : step.text)}">
+              <button type="button" class="pj-next-title" ${step.kind === 'task' ? `data-task="${step.task.id}" title="編輯任務"` : 'data-act="edit" title="編輯專案的下一步"'}><b>下一步：</b>${esc(step.kind === 'task' ? step.task.title : step.text)}${step.kind === 'task' && step.task.due_date ? ` <span class="sub">${formatShort(step.task.due_date)}</span>` : ''}</button></div>`
             : '<span>還沒有下一步。在下方新增任務，或按「編輯」寫一件可以馬上做的事。</span>'}
         </div>
         ${progressHTML(pr)}
