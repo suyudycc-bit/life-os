@@ -4,6 +4,7 @@ import { $ } from '../ui.js';
 import { openGoogleSyncDialog } from './google-sync.js';
 
 const SECTIONS = [
+  ['g-onboard', '剛開始用：三週上手'], // 20261108：功能多、不知從何開始時的入口
   ['g-start', '先走一遍：核心流程'],
   ['g-split', '工作與生活分開'],
   ['g-pages', '每個頁面做什麼'],
@@ -28,6 +29,41 @@ export function mountGuide(root) {
         <h2>目錄</h2>
         <ol>${SECTIONS.map(([id, label]) => `<li><button type="button" class="guide-jump" data-jump="${id}">${label}</button></li>`).join('')}</ol>
       </nav>
+
+      <section class="card guide-sec" id="g-onboard">
+        <h2>剛開始用：三週上手</h2>
+        <p>頁面很多，但每天真正要開的只有<b>三頁</b>。其他頁面等需要時再打開就好；有幾頁一直沒用，資料也不會亂。</p>
+        <h3>一天只開三頁</h3>
+        <dl class="guide-dl">
+          <dt>早上・總覽（2 分鐘）</dt>
+          <dd>在「今天的我」寫一行今日身分（想跳過就跳過），再從今日待辦挑最重要的 1～3 件按 ☆ 星標。</dd>
+          <dt>上班時・工作看板</dt>
+          <dd>有新工作就在「新接工作」上方新增（直接貼網址，標題會自己讀出來）。開始做按 ▶ 計時，做完按 ✓。下班前按「複製每日工作回報」貼到 Teams。今天沒做完的，下一個工作日會自動出現在「進行中」，不用手動搬。</dd>
+          <dt>晚上・每日復盤（3 分鐘）</dt>
+          <dd>上面的數字是自動算的，只要寫三格：今日收獲、問題反思、明日改進。</dd>
+        </dl>
+        <p class="sub">生活上的待辦放「任務管理」，總覽會自己讀到。</p>
+        <h3>第 1 週：建立每日節奏</h3>
+        <ul>
+          <li>到工作看板右上角「列入設定」，勾選算工作的領域。</li>
+          <li>把左側選單的「收藏」「設定」「其他」三組點一下收起來，只留今天、計畫、回顧（這台裝置會記住）。</li>
+          <li>照上面的三頁節奏，連續走 5 個工作天。</li>
+        </ul>
+        <h3>第 2 週：加上計畫</h3>
+        <ul>
+          <li>在「專案與目標」建 2～3 個正在推的長期事項（例如轉職、CFA），每個只要寫好「下一步」，總覽就會列出來。</li>
+          <li>週末打開「時間統計」看一次時間花到哪裡。</li>
+        </ul>
+        <h3>第 3 週以後：用得到再打開</h3>
+        <ul>
+          <li>月初、月底：月度手帳（「遷移」可以一次處理過期任務）。</li>
+          <li>年初或想整理方向：年度手帳（終點身分、身分主線）。</li>
+          <li>心裡卡住：內在整理。想固定做某件事：習慣養成。</li>
+          <li>有東西想收藏：待看清單、靈感知識庫、書影單、想做清單。</li>
+          <li>偶爾到「數據與備份」匯出一次備份。</li>
+        </ul>
+        <p class="sub">這些會自己更新，不用管：完成率與用時、復盤上方的數字、專案的下一步、看板的欄位。各頁面的細節見 <button type="button" class="guide-jump" data-jump="g-pages">每個頁面做什麼</button>，五欄的規則見 <button type="button" class="guide-jump" data-jump="g-board">工作看板</button>。</p>
+      </section>
 
       <section class="card guide-sec" id="g-start">
         <h2>先走一遍：核心流程</h2>
@@ -221,7 +257,8 @@ export function mountGuide(root) {
       </section>
     </div>`;
 
-  root.querySelector('.guide-toc').addEventListener('click', (e) => {
+  // 目錄和內文裡的跳轉按鈕（例如上手段落連到其他段）共用同一個處理
+  root.querySelector('.guide').addEventListener('click', (e) => {
     const b = e.target.closest('[data-jump]');
     if (!b) return;
     const sec = document.getElementById(b.dataset.jump);

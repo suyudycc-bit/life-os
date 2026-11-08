@@ -904,6 +904,8 @@ main:has(.wb-board) > * { max-width: none; }
 .guide-jump:hover { text-decoration: underline; }
 .guide-sec { scroll-margin-top: 16px; line-height: 1.75; overflow-wrap: anywhere; }
 .guide-sec h2 { outline: none; }
+.guide-sec h3 { font-size: 1.05em; color: var(--ink); margin: 16px 0 2px; }
+.guide-sec .guide-jump { display: inline; }
 .guide-sec p { margin: 6px 0; }
 .guide-sec ul, .guide-steps { margin: 6px 0; padding-left: 1.4em; }
 .guide-sec li { margin: 4px 0; }
