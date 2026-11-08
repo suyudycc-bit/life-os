@@ -79,7 +79,7 @@ export function mountInbox(root) {
 
   root.innerHTML = `
     <header class="page-head ib-head">
-      <div><h1>收件匣</h1><p class="sub" id="ib-count">讀取中…</p></div>
+      <div><h1>待看清單</h1><p class="sub" id="ib-count">讀取中…</p></div>
       <button type="button" class="btn-ghost ib-help-btn" id="ib-help">如何從手機分享進來</button>
     </header>
     <section class="card ib-page">
@@ -110,7 +110,7 @@ export function mountInbox(root) {
       form.text.value = '';
       $('#ib-add-src', root).hidden = true;
       await load();
-      toast(dup ? '已存入（這個連結之前也存過一次）' : '已存入收件匣');
+      toast(dup ? '已存入（這個連結之前也存過一次）' : '已存入待看清單');
     } catch (err) { toast(err.message, true); }
   });
   // 貼上時馬上顯示從網址判斷出的來源
@@ -190,7 +190,7 @@ export function mountInbox(root) {
     const cats = data.inboxCategories(items);
     dlg.innerHTML = `
       <form>
-        <h2>${isShare ? '存到收件匣' : '編輯'}</h2>
+        <h2>${isShare ? '存到待看清單' : '編輯'}</h2>
         ${dup ? `<p class="ib-dup">這個連結${data.inboxAgeDays(dup) ? ` ${data.inboxAgeDays(dup)} 天前` : '今天'}已經存過（${TABS[data.inboxTabOf(dup)]}）。再存一次會多一筆。</p>` : ''}
         <label>網址<input name="url" type="url" inputmode="url" maxlength="2000" value="${esc(pre.url || '')}" placeholder="https://…"></label>
         <p class="ib-src-line">來源：<b id="ib-src">${esc(data.INBOX_SOURCES[pre.url ? data.inboxSourceOf(pre.url) : 'other'])}</b><span class="sub">（從網址自動判斷）</span></p>
@@ -202,7 +202,7 @@ export function mountInbox(root) {
           `<button type="button" class="tag-btn" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
         <div class="dialog-actions">
           <button type="button" class="btn-ghost" data-cancel>${isShare ? '不存了' : '取消'}</button>
-          <button class="btn-primary">${isShare ? '存到收件匣' : '儲存'}</button>
+          <button class="btn-primary">${isShare ? '存到待看清單' : '儲存'}</button>
         </div>
       </form>`;
     const f = $('form', dlg);
@@ -230,7 +230,7 @@ export function mountInbox(root) {
         changed();
         if (isShare) { ui.tab = 'unread'; persist(); }
         await load();
-        toast(isShare ? '已存到收件匣' : '已更新');
+        toast(isShare ? '已存到待看清單' : '已更新');
       } catch (err) { toast(err.message, true); }
     };
     dlg.showModal();
@@ -302,7 +302,7 @@ export function mountInbox(root) {
           <li>加入「文字」（Text）動作，內容填下面這串，最後接上藍色變數「URL 編碼文字」（URL Encoded Text）：<code class="ib-code">${esc(share)}</code></li>
           <li>加入「打開 URL」（Open URLs）動作，對象選上一步的「文字」。不需要 Get Headers／Get Contents of URL。</li>
         </ol>
-        <p class="sub">之後在 App 裡按「分享」→ 找到「存到 Life OS」→ 會打開 Life OS 並跳出「存到收件匣」，選分類後按存。還沒登入的話，登入後會接著跳出來。動作名稱以你手機上顯示的為準（完整步驟見 docs/12-ios-share-shortcut.md）。</p>
+        <p class="sub">之後在 App 裡按「分享」→ 找到「存到 Life OS」→ 會打開 Life OS 並跳出「存到待看清單」，選分類後按存。還沒登入的話，登入後會接著跳出來。動作名稱以你手機上顯示的為準（完整步驟見 docs/12-ios-share-shortcut.md）。</p>
         <p class="sub">Threads、IG、小紅書的網頁不允許其他網站讀取內容，所以不會自動抓標題或縮圖，以分享時帶進來的文字為準。</p>
         <div class="dialog-actions">
           <button type="button" class="btn-ghost" data-copy>複製網址開頭</button>
@@ -322,7 +322,7 @@ export function mountInbox(root) {
       items = await data.listInbox();
       loaded = true;
     } catch (e) {
-      toast(`讀取收件匣失敗：${e.message}`, true);
+      toast(`讀取待看清單失敗：${e.message}`, true);
     }
     render();
   }
@@ -389,7 +389,7 @@ export function mountInbox(root) {
     $('#ib-list', root).innerHTML = shown.length ? shown.map((it) => itemHTML(it, staleIds)).join('')
       : `<li class="empty">${!loaded ? '讀取中…' : items.length
         ? (ui.source || ui.cat ? '這個篩選下沒有東西。' : { unread: '沒有還沒看的了 ✓', opened: '點開過、還沒處理的會在這裡。', done: '標成已處理、轉成靈感或任務的會在這裡。' }[ui.tab])
-        : '收件匣是空的。在上面貼一個網址，或照「如何從手機分享進來」設定 iPhone 捷徑。'}</li>`;
+        : '待看清單是空的。在上面貼一個網址，或照「如何從手機分享進來」設定 iPhone 捷徑。'}</li>`;
   }
 
   load().then(() => {

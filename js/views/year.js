@@ -2,6 +2,8 @@
 // 年／季目標＝goals（period），Future Log＝future_events＋只讀的到期目標與星號任務，
 // Year in Pixels＝daily_reviews 的 mood／energy（和每日復盤同一份），回顧＝period_reviews。
 // 數字的算法都在 data.js（yearStats、futureLogMonths），這裡只顯示。
+// 終點身分（20261108 顯化規劃・階段二）＝年度那一筆 period_reviews 的 vision_identity／vision_senses；
+// 身分主線＝goals.mainline（不另存清單；目標對話框、專案卡片、總覽讀同一欄）。
 import * as data from '../data.js';
 import { state, refreshProjects } from '../store.js';
 import { $, esc, toast, confirmDialog, areaChip } from '../ui.js';
@@ -95,7 +97,37 @@ export function mountYear(root) {
         ${REVIEW_FIELDS.map(([k, label, ph]) => `<label>${label || nextLabel}<textarea name="${k}" rows="3" placeholder="${ph}"></textarea></label>`).join('')}
       </div>`;
 
+    const vk = `v:${y}`;
     $('#yr-body', root).innerHTML = `
+      <section class="card yr-vision" aria-labelledby="yr-vision-h">
+        <div class="day-head"><h2 id="yr-vision-h">終點身分</h2><span class="sub" data-save="${vk}" role="status"></span></div>
+        <div data-vision="${y}">
+          <label class="yr-vi">我想成為的人
+            <input name="vision_identity" maxlength="200" placeholder="例如：在藥廠做 BD、能把科學講成生意的人" autocomplete="off">
+          </label>
+          <details class="yr-senses">
+            <summary>活在終點：用五感描述那時的一天 <span class="sub" data-senses-count></span></summary>
+            <p class="sub">像已經活在那裡一樣寫，用現在式。寫得越具體，每天越容易用這個身分做決定。</p>
+            <div class="yr-sense-grid">
+              ${data.VISION_SENSES.map(([k, label, ph]) => `<label>${label}<textarea name="${k}" rows="2" placeholder="${ph}"></textarea></label>`).join('')}
+            </div>
+          </details>
+        </div>
+        <div class="yr-ml">
+          <div class="yr-ml-head"><h3>身分主線</h3><span class="sub" id="yr-ml-count"></span></div>
+          <p class="sub">從目標裡挑 2～3 條最能讓你成為那個人的。總覽會用主線目標所屬專案的下一步，提醒你今天先做它。</p>
+          <ul class="yr-ml-list" id="yr-ml-list"></ul>
+          <div class="yr-ml-tools">
+            <select id="yr-ml-pick" aria-label="從目標加入身分主線"></select>
+            <form class="yr-ml-add" id="yr-ml-add">
+              <input name="title" required maxlength="120" placeholder="或新增一個主線目標" aria-label="新增主線目標">
+              <select name="project_id" aria-label="所屬專案"></select>
+              <button class="btn-timer">新增主線</button>
+            </form>
+          </div>
+        </div>
+      </section>
+
       <section class="card yr-annual">
         <div class="day-head"><h2>今年的年度目標</h2><span class="sub" data-count="${y}"></span></div>
         <ul class="yr-goals" data-goals="${y}"></ul>
@@ -192,8 +224,25 @@ export function mountYear(root) {
       if (!box || dirty.has(p) || (reviewsFor === y && box.contains(document.activeElement))) return;
       for (const [k] of REVIEW_FIELDS) box.querySelector(`[name=${k}]`).value = reviews[i]?.[k] || '';
     });
+    // 終點身分：年度那一筆（reviews[0]）；同樣不蓋掉正在打、還沒存的字
+    const vbox = root.querySelector(`[data-vision="${y}"]`);
+    if (vbox && !dirty.has(`v:${y}`) && !(reviewsFor === y && vbox.contains(document.activeElement))) fillVision(vbox, reviews[0]);
     reviewsFor = y;
     renderAll();
+  }
+
+  function fillVision(box, rec) {
+    const senses = rec?.vision_senses || {};
+    box.querySelector('[name=vision_identity]').value = rec?.vision_identity || '';
+    for (const [k] of data.VISION_SENSES) box.querySelector(`[name=${k}]`).value = senses[k] || '';
+    // 第一次載入這一年：寫過五感就展開；完全沒寫（第一次用）也展開引導；只寫了身分、五感空著＝收起
+    if (reviewsFor !== ui.year) box.querySelector('.yr-senses').open = Object.keys(senses).length > 0 || !rec?.vision_identity;
+    sensesCount(box);
+  }
+  function sensesCount(box) {
+    const n = data.VISION_SENSES.filter(([k]) => box.querySelector(`[name=${k}]`).value.trim()).length;
+    const el = box.querySelector('[data-senses-count]');
+    if (el) el.textContent = n ? `已寫 ${n}／${data.VISION_SENSES.length}` : '還沒寫';
   }
 
   // ===== 畫面 =====
@@ -212,7 +261,7 @@ export function mountYear(root) {
       <input type="checkbox" class="task-done" data-goal-done="${g.id}" ${done ? 'checked' : ''} ${g.status === 'dropped' ? 'disabled' : ''}
         aria-label="${done ? '取消達成' : '標成達成'}：${esc(g.title)}">
       <div class="yr-goal-main">
-        <button type="button" class="yr-goal-t" data-goal-edit="${g.id}" title="編輯目標">${esc(g.title)}</button>
+        <button type="button" class="yr-goal-t" data-goal-edit="${g.id}" title="編輯目標">${esc(g.title)}</button>${g.mainline ? ' <span class="ml-tag" title="身分主線">★主線</span>' : ''}
         <div class="yr-goal-meta">${areaChip(state.areasById[g.area_id])}${goalProjectTag(g)}
           ${g.due_date ? `<span>期限 ${formatShort(g.due_date)}</span>` : ''}
           ${g.status === 'dropped' ? '<span>已放棄</span>' : ''}
@@ -221,7 +270,54 @@ export function mountYear(root) {
       </div></li>`;
   }
 
+  /** 身分主線：列出所有主線（不分年份，和總覽一致），下拉選單列這一年的候選 */
+  function renderMainline() {
+    const ul = $('#yr-ml-list', root);
+    if (!ul) return;
+    const list = data.mainlineGoals(state.goals);
+    ul.innerHTML = list.length ? list.map((g) => {
+      const pr = data.progressOf(state.tasks, 'goal_id', g.id);
+      return `<li class="yr-ml-item ${g.status === 'done' ? 'done' : ''}">
+        <span class="ml-mark" aria-hidden="true">★</span>
+        <div class="yr-goal-main">
+          <button type="button" class="yr-goal-t" data-goal-edit="${g.id}" title="編輯目標">${esc(g.title)}</button>
+          <div class="yr-goal-meta">${goalProjectTag(g) || '<span>沒有掛專案</span>'}
+            ${g.period ? `<span>${esc(data.periodLabel(g.period))}</span>` : ''}
+            ${g.status === 'done' ? '<span>已達成</span>' : ''}
+            <span class="yr-pr" role="img" aria-label="任務完成 ${pr.done}／${pr.total}"><span class="progress-bar"><span style="width:${pr.pct}%"></span></span>
+              ${pr.total ? `${pr.done}/${pr.total}` : '還沒掛任務'}</span></div>
+        </div>
+        <button type="button" class="btn-ghost yr-ml-off" data-ml-off="${g.id}" aria-label="不再當主線：${esc(g.title)}">取消主線</button>
+      </li>`;
+    }).join('') : '<li class="empty">還沒有主線。從下面選一個目標，或直接新增。</li>';
+    const cnt = $('#yr-ml-count', root);
+    const active = list.filter((g) => g.status !== 'done').length;
+    if (cnt) {
+      cnt.textContent = list.length ? `${active} 條進行中${active > data.MAINLINE_SUGGEST_MAX ? `・建議不超過 ${data.MAINLINE_SUGGEST_MAX} 條` : ''}` : '';
+      cnt.classList.toggle('warn', active > data.MAINLINE_SUGGEST_MAX);
+    }
+    const cands = data.mainlineCandidates(state.goals, ui.year);
+    const pick = $('#yr-ml-pick', root);
+    pick.innerHTML = `<option value="">${cands.length ? `從目標加入主線…（${cands.length} 個可選）` : '沒有可加入的目標'}</option>`
+      + cands.map((g) => {
+        const p = g.project_id && state.projects.find((x) => x.id === g.project_id);
+        const where = [g.period ? data.periodLabel(g.period) : '', p ? p.name : ''].filter(Boolean).join('・');
+        return `<option value="${g.id}">${esc(g.title)}${where ? `（${esc(where)}）` : ''}</option>`;
+      }).join('');
+    pick.disabled = !cands.length;
+    const ps = $('#yr-ml-add [name=project_id]', root);
+    if (ps) ps.innerHTML = projectOptions(ps.value, { none: '不掛專案' });
+  }
+
+  /** 加入主線前：已有 3 條進行中的主線時提醒（不硬擋，使用者確認就加） */
+  async function confirmMainlineRoom() {
+    const n = data.mainlineGoals(state.goals).filter((g) => g.status !== 'done').length;
+    if (n < data.MAINLINE_SUGGEST_MAX) return true;
+    return confirmDialog(`已經有 ${n} 條進行中的主線。主線建議 2～3 條，太多每天就分不出先後。確定還要再加一條？`, '仍要加入');
+  }
+
   function renderGoals() {
+    renderMainline();
     // 專案清單可能在別頁改過：新增表單的專案選單跟著更新（保留目前選的）
     root.querySelectorAll('.yr-add [name=project_id]').forEach((sel) => { sel.innerHTML = projectOptions(sel.value, { none: '不掛專案' }); });
     root.querySelectorAll('[data-goals]').forEach((ul) => {
@@ -320,6 +416,15 @@ export function mountYear(root) {
         f.title.value = '';
         await refreshProjects();
         toast('已新增目標');
+      } else if (f.matches('.yr-ml-add')) {
+        if (!(await confirmMainlineRoom())) return;
+        const p = state.projects.find((x) => x.id === f.project_id.value);
+        const area = p?.area_id || state.life.areas[0]?.id || state.areas[0]?.id;
+        // 新增的主線目標放在這一年的年度目標（period＝這一年），年度目標清單也看得到
+        await data.projectSaveGoal({ title: f.title.value, area_id: area, period: String(ui.year), status: 'active', project_id: p?.id || null, mainline: true });
+        f.title.value = '';
+        await refreshProjects();
+        toast('已新增主線目標');
       } else if (f.matches('.yr-fe-add')) {
         const saved = await data.saveFutureEvent({ month: f.dataset.month, day: f.day.value, title: f.title.value });
         f.day.value = '';
@@ -333,6 +438,21 @@ export function mountYear(root) {
   });
 
   body.addEventListener('change', async (e) => {
+    if (e.target.id === 'yr-ml-pick') {
+      const sel = e.target;
+      const g = state.goals.find((x) => x.id === sel.value);
+      if (!g) return;
+      if (!(await confirmMainlineRoom())) { sel.value = ''; return; }
+      try {
+        await data.setGoalMainline(g.id, true);
+        await refreshProjects();
+        toast(`已設為主線：${g.title}`);
+      } catch (err) {
+        sel.value = '';
+        toast(err.message, true);
+      }
+      return;
+    }
     // 新增目標時選了專案：領域跟著改成專案的領域
     if (e.target.matches('.yr-add [name=project_id]')) {
       const p = state.projects.find((x) => x.id === e.target.value);
@@ -359,6 +479,19 @@ export function mountYear(root) {
       ui.by = by.dataset.by;
       root.querySelectorAll('[data-by]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.by === ui.by)));
       if (cache) renderPixels();
+      return;
+    }
+    const off = e.target.closest('[data-ml-off]');
+    if (off) {
+      const g = state.goals.find((x) => x.id === off.dataset.mlOff);
+      if (!g) return;
+      try {
+        await data.setGoalMainline(g.id, false);
+        await refreshProjects();
+        toast(`「${g.title}」不再是主線（目標本身還在）`);
+      } catch (err) {
+        toast(err.message, true);
+      }
       return;
     }
     const ge = e.target.closest('[data-goal-edit]');
@@ -413,6 +546,15 @@ export function mountYear(root) {
 
   // 回顧：停止輸入 0.8 秒後自動存；離開欄位時立刻存
   body.addEventListener('input', (e) => {
+    const vbox = e.target.closest('[data-vision]');
+    if (vbox) {
+      const k = `v:${vbox.dataset.vision}`;
+      clearTimeout(dirty.get(k));
+      dirty.set(k, setTimeout(() => flush(k), SAVE_DELAY));
+      setSaveText(k, '編輯中…');
+      sensesCount(vbox);
+      return;
+    }
     const box = e.target.closest('[data-rv]');
     if (!box) return;
     const p = box.dataset.rv;
@@ -421,6 +563,8 @@ export function mountYear(root) {
     setSaveText(p, '編輯中…');
   });
   body.addEventListener('focusout', (e) => {
+    const vbox = e.target.closest?.('[data-vision]');
+    if (vbox) { if (dirty.has(`v:${vbox.dataset.vision}`)) flush(`v:${vbox.dataset.vision}`); return; }
     const box = e.target.closest?.('[data-rv]');
     if (box && dirty.has(box.dataset.rv)) flush(box.dataset.rv);
   });
@@ -433,6 +577,7 @@ export function mountYear(root) {
   async function flush(p) {
     clearTimeout(dirty.get(p));
     dirty.delete(p);
+    if (p.startsWith('v:')) return flushVision(p);
     const box = root.querySelector(`[data-rv="${p}"]`);
     if (!box) return;
     const values = Object.fromEntries(REVIEW_FIELDS.map(([k]) => [k, box.querySelector(`[name=${k}]`).value]));
@@ -442,6 +587,20 @@ export function mountYear(root) {
     } catch (err) {
       setSaveText(p, `儲存失敗：${err.message}（會再試一次）`);
       dirty.set(p, setTimeout(() => flush(p), 3000));
+    }
+  }
+  async function flushVision(k) {
+    const y = k.slice(2);
+    const box = root.querySelector(`[data-vision="${y}"]`);
+    if (!box) return;
+    const vision_identity = box.querySelector('[name=vision_identity]').value;
+    const vision_senses = Object.fromEntries(data.VISION_SENSES.map(([s]) => [s, box.querySelector(`[name=${s}]`).value]));
+    try {
+      await data.saveVision(y, { vision_identity, vision_senses });
+      setSaveText(k, `已自動儲存 ${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+    } catch (err) {
+      setSaveText(k, `儲存失敗：${err.message}（會再試一次）`);
+      dirty.set(k, setTimeout(() => flush(k), 3000));
     }
   }
   const flushAll = () => Promise.all([...dirty.keys()].map(flush));

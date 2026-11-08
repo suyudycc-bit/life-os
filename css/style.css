@@ -559,6 +559,8 @@ dialog p { margin: 0; }
 .pj-progress .sub { margin: 0; font-size: 12px; white-space: nowrap; }
 .pj-tasks { margin: 0; padding: 0; list-style: none; font-size: 14px; }
 .pj-tasks li { padding: 2px 0; }
+.pj-tasks li.pj-next { padding: 6px 8px 6px 2px; margin-bottom: 4px; align-items: flex-start; gap: 6px; }
+.pj-tasks li.pj-next .drag { margin-top: 1px; }
 .pj-task { display: flex; align-items: center; gap: 4px; }
 .pj-task.dragging { background: var(--wash); box-shadow: 0 4px 14px rgba(0, 0, 0, .08); border-radius: 8px; }
 .pj-task.dragging .drag { cursor: grabbing; }
@@ -1255,6 +1257,38 @@ main:has(.wb-board) > * { max-width: none; }
 .yr-rv label { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--text-2); }
 .yr-rv textarea { font-weight: 400; resize: vertical; font-size: 14px; }
 .card > .yr-rv { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* 終點身分（20261108 顯化規劃・階段二）：年度頁最上面，一句身分寫大一點，五感兩到三欄 */
+.yr-vision { border-top-width: 3px; }
+.yr-vi { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.yr-vi input { font-family: var(--f-hand); font-size: 19px; font-weight: 400; color: var(--ink); padding: 7px 10px; }
+.yr-senses { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.yr-senses summary { cursor: pointer; font-size: 14px; color: var(--ink); font-weight: 600; }
+.yr-senses summary .sub { font-weight: 400; font-size: 12px; }
+.yr-senses > p.sub { margin: 6px 0 0; font-size: 12.5px; }
+.yr-sense-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; margin-top: 8px; }
+.yr-sense-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.yr-sense-grid textarea { font-weight: 400; resize: vertical; font-size: 14px; }
+.yr-ml { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.yr-ml-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.yr-ml-head h3 { margin: 0; font-size: 15px; color: var(--ink); }
+.yr-ml-head .sub.warn { color: var(--ink); font-weight: 700; }
+.yr-ml > p.sub { margin: 4px 0 6px; font-size: 12.5px; }
+.yr-ml-list { list-style: none; margin: 0; padding: 0; }
+.yr-ml-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.yr-ml-item.done .yr-goal-t { text-decoration: line-through; text-decoration-color: var(--ink); color: var(--sub); }
+.yr-ml-list .empty { color: var(--sub); font-size: 13.5px; padding: 6px 2px; }
+.ml-mark { color: var(--ink); font-size: 15px; line-height: 1.5; }
+.yr-ml-off { flex: none; font-size: 12.5px; padding: 3px 8px; }
+.yr-ml-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.yr-ml-tools > select { flex: 1 1 220px; min-width: 0; padding: 5px 8px; font-size: 14px; }
+.yr-ml-add { display: flex; flex: 2 1 320px; gap: 6px; flex-wrap: wrap; }
+.yr-ml-add input { flex: 1 1 140px; min-width: 0; }
+.yr-ml-add select { flex: 0 1 140px; min-width: 0; }
+.yr-ml-add input, .yr-ml-add select { padding: 5px 8px; font-size: 14px; }
+/* 主線小標記（年度目標列、專案卡片目標、未歸屬目標）：藍黑墨水，不用朱紅 */
+.ml-tag { display: inline-block; font-size: 11.5px; font-weight: 600; color: var(--ink); border: 1px solid var(--ink); border-radius: 3px; padding: 0 4px; line-height: 1.5; vertical-align: 1px; white-space: nowrap; }
+@media (max-width: 860px) { .yr-sense-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .yr-sense-grid { grid-template-columns: minmax(0, 1fr); } }
 /* Future Log：12 個月像手帳最前面的未來誌 */
 .yr-future { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 148px), 1fr)); gap: 0 14px; }
 .yr-m { border-top: 1px solid var(--line); padding: 8px 0 10px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1704,6 +1738,235 @@ dialog .tg-pick label.check { flex-direction: row; align-items: flex-start; colo
 .cfa-rows li { padding: 2px 0; border-top: 1px dashed var(--line); overflow-wrap: anywhere; }
 .cfa-k { display: inline-block; font-size: 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-right: 6px; }
 .cfa-note { margin: 0; background: var(--hl); padding: 6px 10px; border-radius: 2px; font-size: 13.5px; }
+
+/* ===== 每日一句 ===== */
+/* 總覽頁首下方：像手帳頁角抄下的一句話。左邊藍黑墨線＋大引號，英文原文為主，出處與意譯小字 */
+.ov-quote {
+  position: relative; margin: -6px 0 22px; padding: 10px 14px 8px 44px;
+  border-left: 2px solid var(--ink); background: color-mix(in srgb, var(--paper-hi) 70%, transparent);
+}
+.ov-quote::before {
+  content: "\201C"; position: absolute; left: 10px; top: -2px;
+  font-family: Georgia, "Times New Roman", serif; font-size: 44px; line-height: 1; color: var(--mute);
+}
+.ovq-label { font-size: 12.5px; color: var(--sub); letter-spacing: .08em; }
+.ovq-text {
+  margin: 2px 0 6px; font-family: var(--f-hand); font-size: 19px; line-height: 1.5; color: var(--ink);
+  overflow-wrap: anywhere; text-wrap: pretty;
+}
+.ovq-cite { margin: 0; font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.ovq-zh { margin: 2px 0 0; font-size: 13.5px; color: var(--sub); }
+.ovq-actions { display: flex; gap: 4px; justify-content: flex-end; margin-top: 2px; }
+.ovq-actions .btn-ghost { font-size: 13px; padding: 2px 8px; }
+@media (max-width: 520px) {
+  .ov-quote { padding: 8px 10px 6px 34px; }
+  .ov-quote::before { left: 6px; font-size: 36px; }
+  .ovq-text { font-size: 17.5px; }
+}
+
+/* ===== 顯化規劃・今天的我（20261108）===== */
+/* 總覽每日一句下方：左欄今日身分＋肯定語（手寫線上的一行字），右欄身分主線任務（螢光黃下一步，同專案卡片） */
+.ov-intent { margin-bottom: 22px; }
+.ovi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; }
+.ovi-form { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ovi-row { display: flex; flex-direction: column; gap: 2px; }
+.ovi-k { font-size: 12.5px; color: var(--sub); letter-spacing: .08em; font-weight: 400; margin: 0; font-family: inherit; }
+.ovi-row input {
+  width: 100%; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent;
+  padding: 6px 2px; font-family: var(--f-hand); font-size: 18px; color: var(--ink);
+}
+.ovi-row input:focus { outline: none; border-bottom: 1.5px solid var(--ink); background: color-mix(in srgb, var(--paper-hi) 70%, transparent); }
+.ovi-row input::placeholder { color: var(--mute); }
+.ovi-hint { margin: 0 0 4px; font-size: 13px; }
+.ovi-hint .btn-ghost { font-size: 13px; padding: 1px 8px; margin-left: 4px; }
+.ovi-main { min-width: 0; }
+.ovi-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ovi-step { display: flex; gap: 8px; align-items: flex-start; background: var(--hl); border-radius: 2px; padding: 7px 10px; font-size: 14px; }
+.ovi-step.empty { display: block; background: none; padding: 4px 0; }
+.ovi-step input { margin-top: 3px; flex: none; }
+.ovi-body { min-width: 0; flex: 1; }
+.ovi-title {
+  border: 0; background: none; padding: 0 4px; margin: 0 -4px; border-radius: 4px; font: inherit; color: var(--text);
+  text-align: left; cursor: pointer; overflow-wrap: anywhere; text-decoration: none;
+}
+.ovi-title:hover { background: rgba(0, 0, 0, .05); }
+.ovi-step .task-meta { margin-top: 2px; font-size: 12.5px; flex-wrap: wrap; }
+.ovi-goal { color: var(--ink); overflow-wrap: anywhere; }
+.ovi-note { margin: 6px 0 0; font-size: 12.5px; }
+.ovi-steps li.empty { color: var(--sub); font-size: 13.5px; }
+@media (max-width: 760px) {
+  .ovi-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* 每日復盤頁首：這天的今日身分與肯定語（和總覽同一份），兩格一列；手機疊成兩列 */
+.rv-intent { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 20px; margin: -8px 0 18px; }
+.rv-intent label { display: flex; flex-direction: column; gap: 0; font-size: 12.5px; color: var(--sub); letter-spacing: .06em; }
+.rv-intent input {
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; padding: 4px 2px;
+  font-family: var(--f-hand); font-size: 16px; color: var(--ink); letter-spacing: 0;
+}
+.rv-intent input:focus { outline: none; border-bottom: 1.5px solid var(--ink); }
+.rv-intent input::placeholder { color: var(--mute); }
+.rv-intent-note { grid-column: 1 / -1; margin: 0; font-size: 12px; }
+.dg-intent { border-top: 1px solid var(--line); padding-top: 8px; font-size: 14px; }
+.dg-intent p { margin: 2px 0; overflow-wrap: anywhere; }
+/* 復盤筆記五格：上排收獲／問題／改進三格，下排里程碑、感恩兩格 */
+.rv-form { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.rv-form label { grid-column: span 2; }
+.rv-form label:nth-child(n+4) { grid-column: span 3; }
+@media (max-width: 760px) {
+  .rv-intent { grid-template-columns: minmax(0, 1fr); }
+  .rv-form label, .rv-form label:nth-child(n+4) { grid-column: 1 / -1; }
+/* ===== 內在整理 ===== */
+/* views/reflect.js（20261108 顯化規劃・階段三）：三種便籤像貼在手帳頁上的小紙條。
+   類型用藍黑墨水小章（轉念／釋放／我允許）＋左側一條紙色帶區分，不用朱紅（朱紅只給今天、超時、刪除）。 */
+.rf-k-mindshift { --rf-tint: var(--link-wash); --rf-edge: var(--link); }
+.rf-k-release { --rf-tint: var(--hl); --rf-edge: #b08a1e; }
+.rf-k-allow { --rf-tint: color-mix(in srgb, var(--ok) 12%, var(--paper-hi)); --rf-edge: var(--ok); }
+.rf-new { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; margin: 0 0 18px; }
+.rf-new-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 14px 10px 16px;
+  border: 1px solid var(--line); border-left: 4px solid var(--rf-edge); border-radius: 2px 4px 4px 2px;
+  background: linear-gradient(to bottom, var(--rf-tint), color-mix(in srgb, var(--rf-tint) 40%, var(--paper-hi)));
+  color: var(--text); min-height: 64px; transition: transform .1s var(--ease-press), box-shadow .15s;
+}
+.rf-new-btn:hover { box-shadow: 0 4px 12px rgba(28, 42, 74, .10); }
+.rf-new-btn:active { transform: scale(.98); }
+.rf-new-t { font-family: var(--f-hand); font-weight: 700; font-size: 19px; color: var(--ink); }
+.rf-new-d { font-size: 13px; color: var(--text-2); line-height: 1.45; }
+/* 小章：藍黑墨水框、微斜 */
+.rf-stamp {
+  display: inline-block; margin-right: 8px; padding: 0 7px; border: 1.5px solid var(--ink); border-radius: 3px;
+  color: var(--ink); font-size: 15px; line-height: 1.5; transform: rotate(-3deg); background: var(--paper-hi); vertical-align: 2px;
+}
+.rf-stamp.sm { font-size: 12px; padding: 0 5px; border-width: 1px; margin-right: 6px; vertical-align: 1px; }
+/* 統計：同今日欄的三格＋兩行排行 */
+.rf-stats-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.rf-stats-head h2 { margin: 0; }
+.rf-sum { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.rf-sum > div { display: flex; flex-direction: column; padding: 4px 10px 8px; min-width: 0; }
+.rf-sum > div + div { border-left: 1px dashed var(--line); }
+.rf-sum b { font-family: var(--f-num); font-weight: 600; font-size: 30px; line-height: 1.1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rf-sum b i { font-style: normal; font-size: 20px; margin: 0 3px; color: var(--sub); }
+.rf-sum span { font-size: 13px; color: var(--text-2); }
+.rf-sum small { font-size: 12px; color: var(--sub); overflow-wrap: anywhere; }
+.rf-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 4px 0; font-size: 14px; }
+.rf-top-k { color: var(--sub); font-size: 13px; min-width: 7em; }
+.rf-tally { border-bottom: 2px solid color-mix(in srgb, var(--hl) 80%, #ffd84d); padding: 0 2px; }
+.rf-tally b { font-family: var(--f-num); color: var(--ink); }
+/* 篩選 */
+.rf-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.rf-filters input[type=search] { flex: 1 1 180px; }
+.rf-dates { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.rf-dates input { padding: 6px 8px; }
+/* 歷史清單：每張一列，左邊日期、左緣一條便籤色帶 */
+.rf-list { list-style: none; margin: 4px 0 0; padding: 0; }
+.rf-list .empty { color: var(--sub); padding: 14px 6px; font-size: 14px; }
+.rf-item {
+  display: grid; grid-template-columns: 52px 1fr; gap: 4px 12px; padding: 10px 6px 10px 10px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent); box-shadow: inset 3px 0 0 var(--rf-edge);
+}
+.rf-day { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1; padding-top: 2px; }
+.rf-day b { font-family: var(--f-num); font-weight: 600; font-size: 20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rf-day small { font-family: var(--f-num); font-size: 12px; color: var(--sub); }
+.rf-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; cursor: pointer; border-radius: 3px; }
+.rf-main:hover .rf-title { text-decoration: underline; text-underline-offset: 3px; }
+.rf-line { display: block; }
+.rf-title { color: var(--text); overflow-wrap: anywhere; }
+.rf-peek, .rf-after { font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.rf-meta { font-size: 12.5px; color: var(--sub); }
+.rf-emo-line { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.rf-next { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 2px 8px; }
+.rf-next-t { font-size: 14px; overflow-wrap: anywhere; min-width: 0; }
+.rf-next-k { display: inline-block; background: var(--hl); padding: 0 6px; margin-right: 6px; border-radius: 2px; font-size: 12.5px; color: var(--ink); }
+.rf-acts { display: flex; flex-wrap: wrap; gap: 2px; margin-left: auto; }
+.rf-acts .btn-ghost { font-size: 13px; padding: 3px 7px; }
+.rf-linked { color: var(--link); max-width: 22em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rf-linked.is-done { color: var(--sub); }
+/* 對話框：手機上幾乎滿版、可捲動；動作列黏在底部 */
+dialog.rf-dialog { width: min(640px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow-y: auto; padding: 18px; overscroll-behavior: contain; }
+.rf-form { gap: 12px; }
+.rf-form-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.rf-form-head h2 { display: flex; align-items: center; }
+dialog label.rf-date { flex-direction: row; align-items: center; gap: 6px; }
+.rf-hint { margin: -6px 0 0; padding-left: 8px; border-left: 3px solid var(--rf-edge); }
+dialog .rf-field { color: var(--text-2); font-size: 14px; }
+dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; color: var(--text); } /* 16px：iPhone 點進去不會自動放大 */
+.rf-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rf-cols .rf-field:first-child textarea { background: color-mix(in srgb, var(--link-wash) 50%, var(--paper-hi)); }
+.rf-cols .rf-field:last-child textarea { background: color-mix(in srgb, var(--hl) 45%, var(--paper-hi)); }
+.rf-group { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.rf-group legend { font-size: 14px; color: var(--text-2); padding: 0; margin-bottom: 6px; }
+.rf-wants, .rf-emos { display: flex; flex-wrap: wrap; gap: 6px; }
+.rf-emo-g { display: grid; grid-template-columns: 5.2em 1fr; gap: 6px; align-items: start; }
+.rf-emo-k { font-size: 12.5px; color: var(--sub); padding-top: 6px; }
+.rf-chip {
+  border: 1px solid var(--line); background: var(--paper-hi); color: var(--text-2); border-radius: 999px;
+  padding: 4px 11px; font-size: 14px; min-height: 34px; transition: background .15s, color .15s, transform .1s var(--ease-press);
+}
+.rf-chip:active { transform: scale(.96); }
+.rf-chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rf-want { font-size: 15px; padding: 5px 14px; }
+.rf-chip.sm { min-height: 0; padding: 0 8px; font-size: 12.5px; background: var(--wash); border-color: transparent; }
+.rf-own-add { display: flex; gap: 6px; }
+.rf-own-add input { flex: 1; font-size: 16px; }
+/* 釋放：引導提問＋次數＋強度 */
+.rf-guide { border-top: 1.5px solid var(--ink); background: color-mix(in srgb, var(--hl) 35%, var(--paper-hi)); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.rf-guide ol { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 14.5px; color: var(--text); }
+.rf-counter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rf-count { display: inline-flex; align-items: baseline; gap: 4px; min-width: 5.5em; justify-content: center; }
+.rf-count b { font-family: var(--f-num); font-weight: 600; font-size: 34px; line-height: 1; color: var(--ink); display: inline-block; font-variant-numeric: tabular-nums; }
+.rf-count small { font-size: 13px; color: var(--sub); }
+.rf-count b.rf-bump { animation: num-bump .42s var(--ease-out); }
+.rf-minus { font-size: 20px; width: 40px; height: 40px; border-color: var(--line); }
+.rf-plus { min-height: 44px; padding: 8px 18px; flex: 1 1 auto; max-width: 220px; }
+.rf-scale-row { display: flex; flex-direction: column; gap: 4px; }
+.rf-scale-k { font-size: 13.5px; color: var(--text-2); }
+.rf-scale { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; max-width: 440px; }
+.rf-scale button {
+  min-height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 3px; background: var(--paper-hi);
+  font-family: var(--f-num); font-size: 16px; color: var(--text-2); transition: background .15s, transform .1s var(--ease-press);
+}
+.rf-scale button:active { transform: scale(.94); }
+.rf-scale button[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rf-scale-note { margin: -4px 0 0; font-size: 12.5px; }
+.rf-actions { flex-wrap: wrap; position: sticky; bottom: -18px; background: var(--paper-hi); padding: 10px 0 4px; border-top: 1px solid var(--line); }
+.rf-del { margin-right: auto; }
+@container main (max-width: 560px) {
+  .rf-item { grid-template-columns: 44px 1fr; gap: 4px 8px; }
+  .rf-day b { font-size: 18px; }
+  .rf-sum b { font-size: 24px; }
+  .rf-sum b i { font-size: 16px; }
+  .rf-sum > div { padding: 4px 6px 8px; }
+  .rf-next { grid-column: 1 / -1; }
+  /* 手機：三顆新增按鈕排成一列，說明藏起來（按鈕名稱已足夠，對話框裡有同一句提示） */
+  .rf-new { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .rf-new-btn { min-height: 48px; padding: 8px 6px 8px 8px; align-items: center; justify-content: center; }
+  .rf-new-t { font-size: 17px; }
+  .rf-new-d { display: none; }
+}
+@media (max-width: 560px) {
+  dialog.rf-dialog { padding: 14px 12px; }
+  .rf-actions { bottom: -14px; }
+  .rf-cols { grid-template-columns: 1fr; }
+  .rf-emo-g { grid-template-columns: 1fr; gap: 2px; }
+  .rf-emo-k { padding-top: 0; }
+  .rf-scale button { min-height: 36px; font-size: 15px; }
+}
+/* 進頁時沿用「動態與轉場」的 item-in 錯開淡入 */
+#main.page-enter .rf-item {
+  animation: item-in .26s var(--ease-out) backwards;
+  &:nth-child(2) { animation-delay: 30ms; }
+  &:nth-child(3) { animation-delay: 60ms; }
+  &:nth-child(4) { animation-delay: 90ms; }
+  &:nth-child(5) { animation-delay: 120ms; }
+  &:nth-child(6) { animation-delay: 150ms; }
+  &:nth-child(7) { animation-delay: 180ms; }
+  &:nth-child(n+8) { animation-delay: 210ms; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rf-chip:active, .rf-scale button:active, .rf-new-btn:active { transform: none; }
+  .rf-count b.rf-bump { animation: none; }
+}
 
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。

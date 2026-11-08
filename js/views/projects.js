@@ -86,7 +86,9 @@ export function goalProjectTag(g) {
 /** 目標對話框；年度手帳也用它（preset：新增時預先帶入的 period、area_id、project_id） */
 export function openGoalDialog(g = null, preset = {}) {
   const dlg = $('#project-dialog');
-  const v = g || { title: '', area_id: state.areas[0]?.id, due_date: '', status: 'active', period: '', project_id: '', ...preset };
+  const v = g || { title: '', area_id: state.areas[0]?.id, due_date: '', status: 'active', period: '', project_id: '', mainline: false, ...preset };
+  // 身分主線（20261108）：和年度頁「身分主線」是同一欄 goals.mainline；超過建議上限只提示、不擋
+  const otherMain = data.mainlineGoals(state.goals).filter((x) => x.id !== g?.id && x.status !== 'done').length;
   dlg.innerHTML = `
     <form>
       <h2>${g ? '編輯目標' : '新增目標'}</h2>
@@ -100,6 +102,8 @@ export function openGoalDialog(g = null, preset = {}) {
         <label>期間<select name="period">${periodOptions(v.period || '')}</select></label>
         <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
+      <label class="check"><input type="checkbox" name="mainline" ${v.mainline ? 'checked' : ''}> ★ 身分主線（年度手帳「終點身分」卡列出；總覽用它所屬專案的下一步當今天的主線任務）</label>
+      <p class="sub" data-ml-hint ${otherMain >= data.MAINLINE_SUGGEST_MAX && !v.mainline ? '' : 'hidden'}>已經有 ${otherMain} 條進行中的主線，建議 2～3 條；仍可以勾。</p>
       <p class="sub">期間＝這是哪一年、哪一季或哪個月的目標，會出現在年度手帳對應的位置。掛了專案的目標會出現在那張專案卡片裡。</p>
       <div class="dialog-actions">
         ${g ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
@@ -113,7 +117,7 @@ export function openGoalDialog(g = null, preset = {}) {
     if (p) $('[name=area_id]', dlg).value = p.area_id;
   };
   bindDialog(dlg, g, {
-    save: (f) => data.projectSaveGoal({ id: g?.id, title: f.get('title'), area_id: f.get('area_id'), due_date: f.get('due_date'), status: f.get('status'), period: f.get('period'), project_id: f.get('project_id') || null }),
+    save: (f) => data.projectSaveGoal({ id: g?.id, title: f.get('title'), area_id: f.get('area_id'), due_date: f.get('due_date'), status: f.get('status'), period: f.get('period'), project_id: f.get('project_id') || null, mainline: f.get('mainline') === 'on' }),
     del: () => data.deleteGoal(g.id),
     delMsg: () => `確定刪除目標「${g.title}」？掛在上面的任務不會被刪，只會取消關聯。`,
   });
@@ -269,7 +273,7 @@ export function mountProjects(root) {
       return;
     }
     try {
-      await data.createTask({ title: form.title.value, area_id: p.area_id, project_id: p.id }, state.tasks);
+      await data.createTaskAtProjectEnd({ title: form.title.value, area_id: p.area_id, project_id: p.id }, state.tasks);
       await refreshTasks();
       toast('已新增任務');
       list.querySelector(`[data-id="${p.id}"] input[name=title]`)?.focus();
@@ -349,25 +353,31 @@ export function mountProjects(root) {
     list.innerHTML = projects.length ? projects.map((p) => {
       const pr = data.progressOf(state.tasks, 'project_id', p.id);
       const step = data.nextStepOf(p, state.tasks);
-      // 已經當成「下一步」的任務不在下面重複列出
-      const open = pr.tasks.filter(data.isOpen).filter((t) => !(step?.kind === 'task' && t.id === step.task.id));
+      const open = pr.tasks.filter(data.isOpen).sort(data.compareTasks);
+      // 下一步是任務時，它就是清單第一列（黃底、可勾完成、可拖移）；拖到第一列＝換成新的下一步
+      const stepTask = step?.kind === 'task' ? step.task : null;
+      const rest = open.filter((t) => t.id !== stepTask?.id);
+      const shown = [...(stepTask ? [stepTask] : []), ...rest.slice(0, 5)];
       return `
       <article class="card pj-card" data-id="${p.id}">
         <div class="day-head"><h3>${esc(p.name)}</h3><button class="btn-ghost" data-act="edit">編輯</button></div>
         <div class="task-meta">${areaChip(state.areasById[p.area_id])}<span>${data.PROJECT_STATUS[p.status]}</span></div>
-        <div class="pj-next ${step ? '' : 'empty'}">
-          ${step
-            // 只有勾選框會完成；點文字＝開編輯（任務開任務編輯，手寫的開專案編輯）
-            ? `<div class="pj-next-row"><input type="checkbox" class="pj-next-done" ${step.kind === 'task' ? `data-task="${step.task.id}"` : ''} aria-label="下一步完成：${esc(step.kind === 'task' ? step.task.title : step.text)}">
-              <button type="button" class="pj-next-title" ${step.kind === 'task' ? `data-task="${step.task.id}" title="編輯任務"` : 'data-act="edit" title="編輯專案的下一步"'}><b>下一步：</b>${esc(step.kind === 'task' ? step.task.title : step.text)}${step.kind === 'task' && step.task.due_date ? ` <span class="sub">${formatShort(step.task.due_date)}</span>` : ''}</button></div>`
-            : '<span>還沒有下一步。在下方新增任務，或按「編輯」寫一件可以馬上做的事。</span>'}
-        </div>
         ${progressHTML(pr)}
-        ${open.length ? `<ul class="pj-tasks">${open.slice(0, 5).map((t) => `<li class="pj-task" data-id="${t.id}" data-open>
+        ${step?.kind === 'manual'
+          ? `<div class="pj-next"><div class="pj-next-row"><input type="checkbox" class="pj-next-done" aria-label="下一步完成：${esc(step.text)}">
+              <button type="button" class="pj-next-title" data-act="edit" title="編輯專案的下一步"><b>下一步：</b>${esc(step.text)}</button></div></div>`
+          : !step ? '<div class="pj-next empty"><span>還沒有下一步。在下方新增任務，或按「編輯」寫一件可以馬上做的事。</span></div>' : ''}
+        ${shown.length ? `<ul class="pj-tasks">${shown.map((t) => t === stepTask
+          // 只有勾選框會完成；點文字＝開任務編輯
+          ? `<li class="pj-task pj-next" data-id="${t.id}" data-open>
+            <button class="drag" aria-label="拖移排序：${esc(t.title)}（也可用上下鍵）" title="拖移排序">⋮⋮</button>
+            <input type="checkbox" class="pj-next-done" data-task="${t.id}" aria-label="下一步完成：${esc(t.title)}">
+            <button type="button" class="pj-next-title" data-task="${t.id}" title="編輯任務"><b>下一步：</b>${esc(t.title)}${t.due_date ? ` <span class="sub">${formatShort(t.due_date)}</span>` : ''}</button></li>`
+          : `<li class="pj-task" data-id="${t.id}" data-open>
             <button class="drag" aria-label="拖移排序：${esc(t.title)}（也可用上下鍵）" title="拖移排序">⋮⋮</button>
             <button type="button" class="pj-task-title" data-task="${t.id}" title="編輯任務">${esc(t.title)}</button>
             ${t.due_date ? `<span class="sub">${formatShort(t.due_date)}</span>` : ''}</li>`).join('')}
-          ${open.length > 5 ? `<li class="sub pj-more">還有 ${open.length - 5} 件…</li>` : ''}</ul>` : ''}
+          ${rest.length > 5 ? `<li class="sub pj-more">還有 ${rest.length - 5} 件…</li>` : ''}</ul>` : ''}
         <form class="pj-add"><input name="title" placeholder="新增任務到這個專案" aria-label="新增任務到 ${esc(p.name)}" required><button class="btn-timer">新增</button></form>
         ${goalsBlock(p)}
         ${habitsBlock(p)}
@@ -383,7 +393,7 @@ export function mountProjects(root) {
       const overdue = g.status === 'active' && g.due_date && g.due_date < today();
       return `<li class="${g.status !== 'active' ? 'muted' : ''}">
         <button type="button" class="goal-row" data-goal="${g.id}">
-          <span class="goal-title">${g.status === 'done' ? '✓ ' : ''}${esc(g.title)}</span>
+          <span class="goal-title">${g.status === 'done' ? '✓ ' : ''}${esc(g.title)}${g.mainline ? ' <span class="ml-tag" title="身分主線">★主線</span>' : ''}</span>
           ${areaChip(state.areasById[g.area_id])}
           ${g.period ? `<span class="sub">${data.periodLabel(g.period)}</span>` : ''}
           ${g.due_date ? `<span class="${overdue ? 'overdue' : 'sub'}">${overdue ? '已過期 ' : '期限 '}${formatShort(g.due_date)}</span>` : ''}
@@ -406,7 +416,7 @@ export function mountProjects(root) {
           <input type="checkbox" class="task-done pj-goal-done" data-goal="${g.id}" ${g.status === 'done' ? 'checked' : ''} ${g.status === 'dropped' ? 'disabled' : ''}
             aria-label="${g.status === 'done' ? '取消達成' : '標成達成'}：${esc(g.title)}">
           <button type="button" class="pj-goal-main" data-goal-edit="${g.id}" title="編輯目標">
-            <span class="goal-title ${g.status === 'done' ? 'is-done' : ''}">${esc(g.title)}</span>
+            <span class="goal-title ${g.status === 'done' ? 'is-done' : ''}">${esc(g.title)}${g.mainline ? ' <span class="ml-tag" title="身分主線">★主線</span>' : ''}</span>
             <span class="pj-goal-meta">
               ${g.period ? `<span class="pj-period">${data.periodLabel(g.period)}</span>` : ''}
               ${g.due_date ? `<span class="${overdue ? 'overdue' : ''}">${overdue ? '已過期 ' : '期限 '}${formatShort(g.due_date)}</span>` : ''}

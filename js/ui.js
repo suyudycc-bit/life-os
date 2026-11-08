@@ -49,6 +49,16 @@ export function linkLabel(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url; }
 }
 
+/** 讀不到網頁標題時的暫時名稱：網域＋路徑（例如 example.com/docs/a），最多 80 字 */
+export function linkFallbackTitle(url) {
+  try {
+    const u = new URL(url);
+    let path = u.pathname.replace(/\/+$/, '');
+    try { path = decodeURIComponent(path); } catch { /* 保留原樣 */ }
+    return `${u.hostname.replace(/^www\./, '')}${path}`.slice(0, 80);
+  } catch { return String(url).slice(0, 80); }
+}
+
 export function formatDateTime(ts) {
   const d = new Date(ts);
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {

@@ -122,6 +122,19 @@ export async function createTask(task, existing = []) {
   return must(await supabase.from('tasks').insert(pickTask({ ...task, title: task.title.trim(), sort_order })).select().single());
 }
 
+/**
+ * 專案卡片新增任務：排在這個專案最後一件未完成任務的後面（不搶「下一步」）；專案還沒有任務時照一般新增。
+ * 順序用和拖移相同的 moveTask＋reorderTasks 寫入，任務管理頁看到的順序一致。
+ */
+export async function createTaskAtProjectEnd(task, existing = []) {
+  const last = existing.filter((t) => t.project_id === task.project_id && isOpen(t)).sort(compareTasks).at(-1);
+  const created = await createTask(task, existing);
+  if (!last) return created;
+  const all = [...existing, created];
+  await reorderTasks(moveTask(all, created.id, null, last.id), Object.fromEntries(all.map((t) => [t.id, t])));
+  return created;
+}
+
 /** 拖移後：依畫面上的新順序寫入 sort_order，只更新有變動的任務 */
 export async function reorderTasks(orderedIds, tasksById) {
   const changed = orderedIds
@@ -363,14 +376,28 @@ export async function getReview(day) {
 export async function listReviewDates(limit = 60) {
   const rows = must(await supabase.from('daily_reviews').select('*')
     .order('review_date', { ascending: false }).limit(limit));
-  return rows.filter((r) => [r.gains, r.problems, r.tomorrow_improve].some((v) => v?.trim())); // 生活復盤（工作的 Wrap up 在工作看板）
+  return rows.filter((r) => REVIEW_NOTE_KEYS.some((k) => r[k]?.trim())); // 生活復盤（工作的 Wrap up 在工作看板）
 }
 
-/** 同一天只有一筆（unique user_id + review_date），存檔用 upsert */
-export async function saveReview(day, { gains, problems, tomorrow_improve }) {
+/** 生活復盤的手寫欄（晚上）：收獲、問題、明日改進＋顯化規劃的里程碑、感恩（migration 20261108_manifest） */
+export const REVIEW_NOTE_KEYS = ['gains', 'problems', 'tomorrow_improve', 'milestones', 'gratitude'];
+/** 顯化規劃的早上兩欄：今日身分、肯定語（同一筆 daily_reviews） */
+export const REVIEW_INTENT_KEYS = ['identity', 'affirmation'];
+const REVIEW_TEXT_KEYS = [...REVIEW_NOTE_KEYS, ...REVIEW_INTENT_KEYS];
+
+/**
+ * 同一天只有一筆（unique user_id + review_date），存檔用 upsert。
+ * 只寫傳進來的欄位（undefined 的不寫），所以總覽存今日身分不會蓋掉晚上的復盤，反之亦然（同 saveMood）。
+ */
+export async function saveReview(day, fields) {
+  const row = {};
+  for (const k of REVIEW_TEXT_KEYS) {
+    if (fields[k] !== undefined) row[k] = typeof fields[k] === 'string' ? (fields[k].trim() || null) : (fields[k] ?? null);
+  }
+  if (!Object.keys(row).length) throw new Error('沒有要儲存的欄位');
   const session = await getSession();
   return must(await supabase.from('daily_reviews').upsert({
-    user_id: session.user.id, review_date: day, gains, problems, tomorrow_improve, updated_at: new Date().toISOString(),
+    user_id: session.user.id, review_date: day, ...row, updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id,review_date' }).select().single());
 }
 
@@ -544,12 +571,12 @@ export async function listWorkTags() {
 
 /**
  * 五欄看板（docs/08）：不存每日快照，由任務狀態與日期即時算出，所以任務管理、日曆、總覽看到的是同一份。
- * 本日：新接（今天新增、還沒開始）／進行中（狀態進行中，或今天到期、已過期）／已完成（今天完成）
+ * 本日：新接（今天新增、還沒開始）／進行中（狀態進行中，或今天到期、已過期，或之前新接沒填日期還沒做完）／已完成（今天完成）
  * 後續：明天預計（排到下一個工作日）／累積未完成（其他未完成）
  */
 export const BOARD_COLUMNS = [
   { id: 'new', label: '新接工作', group: 'today', hint: '今天新開、還沒開始' },
-  { id: 'inprogress', label: '進行中工作', group: 'today', hint: '正在處理，或今天到期、已過期' },
+  { id: 'inprogress', label: '進行中工作', group: 'today', hint: '正在處理、今天到期或已過期，或之前新接還沒做完' },
   { id: 'done', label: '已完成工作', group: 'today', hint: '今天完成' },
   { id: 'tomorrow', label: '明天預計處理項目', group: 'next', hint: '排到下一個工作日' },
   { id: 'backlog', label: '累積未完成工作', group: 'next', hint: '未完成，不是下一個工作日要做的' },
@@ -587,11 +614,17 @@ export function boardColumnOf(t, day) {
   const d = taskDay(t);
   // 20261106：拖進「累積未完成」的會留在那裡，直到日期排到今天／下一個工作日或被拖到別欄
   if (t.board_parked && !(d && d <= nextWorkingDay(day))) return 'backlog';
-  if (localDate(t.created_at) === day && (!d || d <= day)) return 'new';
+  const created = localDate(t.created_at);
+  if (created === day && (!d || d <= day)) return 'new';
   if (d && d <= day) return 'inprogress';
+  // 20261107：以前在「新接」、沒填日期也沒拖去累積的，下一個工作日起自動在「進行中」（不用手動拖）。
+  // 只看 board_parked 上線（20261106）之後建立的：更早拖去累積未完成的當時沒有標記，不能把它們拉回來。
+  if (!d && created < day && created >= BOARD_CARRY_SINCE) return 'inprogress';
   if (d === nextWorkingDay(day)) return 'tomorrow';
   return 'backlog';
 }
+/** 沒日期的工作從這天建立的起，隔日自動進行中（這天起拖去累積未完成才會記 board_parked） */
+export const BOARD_CARRY_SINCE = '2026-11-06';
 
 /** day 這天的五欄：{ new: [...], inprogress: [...], ... } */
 export function boardColumns(tasks, areasById, day) {
@@ -764,6 +797,7 @@ export async function saveGoal(g) {
   const row = { title: g.title?.trim(), area_id: g.area_id, due_date: g.due_date || null, status: g.status || 'active' };
   if ('period' in g) row.period = g.period || null; // Phase J：沒傳就不動，專案頁編輯目標不會清掉期間
   if ('project_id' in g) row.project_id = g.project_id || null; // 20261106：沒傳就不動
+  if ('mainline' in g) row.mainline = Boolean(g.mainline); // 20261108 身分主線：沒傳就不動（年度頁勾達成、規劃表匯入都不會清掉）
   if (row.period && !isPeriod(row.period)) throw new Error('期間格式不正確');
   if (!row.title) throw new Error('請輸入目標');
   if (!row.area_id) throw new Error('請選擇領域');
@@ -796,6 +830,35 @@ export function nextStepOf(project, tasks) {
   if (project.next_action?.trim()) return { kind: 'manual', text: project.next_action.trim() };
   const t = tasks.filter((x) => x.project_id === project.id && isOpen(x)).sort(compareTasks)[0];
   return t ? { kind: 'task', task: t } : null;
+}
+
+/**
+ * 顯化規劃・身分主線任務（總覽早上區塊；不另存，每次由 goals／projects／tasks 算出）。
+ * - 有勾 mainline 的目標（未放棄）：列它們所屬專案（goals.project_id，未完成的專案）的下一步，
+ *   同一專案只列一次；下一步一律用 nextStepOf（與專案卡片同一函式），勾完會自動遞補。
+ * - 沒有任何主線目標：列生活領域進行中專案的下一步，最多 3 個（依領域順序；沒有下一步的略過）。
+ * @returns {{ mode:'mainline'|'fallback', items:{project, goals:object[], step}[], unlinked:object[] }}
+ *   unlinked＝主線目標但沒掛專案（只在 mainline 模式）
+ */
+export function mainlineSteps(st, max = 3) {
+  const mainGoals = st.goals.filter((g) => g.mainline && g.status !== 'dropped');
+  if (mainGoals.length) {
+    const byProject = new Map();
+    const unlinked = [];
+    for (const g of mainGoals) {
+      const p = g.project_id && st.projects.find((x) => x.id === g.project_id);
+      if (!p || p.status === 'done') { if (!g.project_id) unlinked.push(g); continue; }
+      if (!byProject.has(p.id)) byProject.set(p.id, { project: p, goals: [], step: nextStepOf(p, st.tasks) });
+      byProject.get(p.id).goals.push(g);
+    }
+    return { mode: 'mainline', items: [...byProject.values()], unlinked };
+  }
+  const items = activeProjectsByArea(st.life.projects, st.life.areas)
+    .flatMap((grp) => grp.projects)
+    .map((p) => ({ project: p, goals: [], step: nextStepOf(p, st.tasks) }))
+    .filter((x) => x.step)
+    .slice(0, max);
+  return { mode: 'fallback', items, unlinked: [] };
 }
 
 /** 總覽：各領域進行中專案的下一步 */
@@ -831,13 +894,15 @@ export function ganttData(projects, goals, tasks, day = today()) {
 export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks', 'task_memos', 'time_entries',
   'daily_reviews', 'notes', 'habits', 'habit_logs', 'routine_phrases',
   'period_reviews', 'future_events', 'media_items', 'bucket_items',
-  'inbox_items', 'contact_stages', 'contacts', 'contact_logs'];
+  'inbox_items', 'contact_stages', 'contacts', 'contact_logs',
+  'reflections']; // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
   work_tags: '工作種類', routine_phrases: '常用詞組',
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
-  inbox_items: '收件匣', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
+  inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
+  reflections: '內在整理',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -875,6 +940,7 @@ const BACKUP_REFS = {
   inbox_items: { area_id: 'areas' },
   contacts: { stage_id: 'contact_stages' },
   contact_logs: { contact_id: 'contacts' },
+  reflections: { task_id: 'tasks', area_id: 'areas' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -898,6 +964,7 @@ const NATURAL_KEY = {
   contact_stages: (r) => r.label,
   contacts: (r) => `${r.name}|${r.created_at}`,
   contact_logs: (r) => `${r.contact_id}|${r.log_date}|${r.created_at}`,
+  reflections: (r) => `${r.kind}|${r.entry_date}|${r.created_at}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -1006,6 +1073,31 @@ async function invokeFn(name, body = {}) {
   }
   if (data?.error) throw new Error(data.error);
   return data;
+}
+
+/**
+ * 讀網頁標題（Edge Function link-title；瀏覽器因 CORS 讀不到別的網站）。
+ * 回傳 { title, reason }：讀到標題時 title 有值；讀不到時 title 為空、reason 說明原因（不丟錯，呼叫端照常新增）。
+ */
+export async function fetchLinkTitle(url, { timeoutMs = 8000 } = {}) {
+  if (!/^https?:\/\//i.test(String(url || ''))) return { title: '', reason: '不是 http／https 網址' };
+  try {
+    const call = supabase.functions.invoke('link-title', { body: { url } });
+    const late = new Promise((r) => { setTimeout(() => r({ data: null, error: { message: 'timeout' } }), timeoutMs); });
+    const { data, error } = await Promise.race([call, late]);
+    if (error) {
+      let msg = error.message || '';
+      if (error.context?.status === 404) return { title: '', reason: '讀標題服務還沒部署' };
+      try { msg = (await error.context?.json())?.error || msg; } catch { /* 忽略 */ }
+      if (/timeout/i.test(msg)) return { title: '', reason: '讀取逾時' };
+      if (/Failed to send|not found|404|fetch/i.test(msg)) return { title: '', reason: '讀標題服務還沒部署或連不上' };
+      return { title: '', reason: msg || '讀取失敗' };
+    }
+    const title = String(data?.title || '').trim();
+    return title ? { title, reason: '' } : { title: '', reason: data?.error || '這個網頁沒有提供標題（可能需要登入）' };
+  } catch (e) {
+    return { title: '', reason: e.message || '讀取失敗' };
+  }
 }
 
 /** 立即同步（讀＋寫），回傳本人的同步結果 */
@@ -1173,6 +1265,60 @@ export async function savePeriodReview(period, { wins, lessons, next_focus }) {
     user_id: session.user.id, period, wins: wins?.trim() || null, lessons: lessons?.trim() || null,
     next_focus: next_focus?.trim() || null, updated_at: new Date().toISOString(),
   }, { onConflict: 'user_id,period' }).select().single());
+}
+
+// --- 終點身分（顯化規劃・階段二，migration 20261108_manifest）---
+// 存在年度那一筆 period_reviews（period='YYYY'）；只寫這兩欄，不碰 wins／lessons／next_focus。
+// savePeriodReview 也只寫自己的三欄，所以兩邊各存各的、不會互相覆蓋。
+export const VISION_SENSES = [
+  ['see', '看到', '那時的你每天看到什麼？房間、窗外、桌上、身邊的人'],
+  ['hear', '聽到', '聽到什麼聲音、別人怎麼稱呼你、你說話的語氣'],
+  ['touch', '摸到', '手上拿著什麼、身體的感覺、穿著的質感'],
+  ['smell', '聞到', '空氣、咖啡、書頁、海邊……'],
+  ['taste', '嚐到', '早餐、慶祝時的味道'],
+  ['feel', '我感受到', '心裡的狀態：踏實、自由、被信任……'],
+];
+const VISION_KEYS = VISION_SENSES.map(([k]) => k);
+/** 只留六個鍵、去頭尾空白、空的丟掉 */
+export function cleanVisionSenses(v) {
+  const out = {};
+  for (const k of VISION_KEYS) {
+    const t = typeof v?.[k] === 'string' ? v[k].trim() : '';
+    if (t) out[k] = t;
+  }
+  return out;
+}
+export async function saveVision(year, { vision_identity, vision_senses }) {
+  const period = String(year);
+  if (!/^[0-9]{4}$/.test(period)) throw new Error('終點身分只存在年度（例如 2026）');
+  const session = await getSession();
+  return must(await supabase.from('period_reviews').upsert({
+    user_id: session.user.id, period, vision_identity: vision_identity?.trim() || null,
+    vision_senses: cleanVisionSenses(vision_senses), updated_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,period' }).select().single());
+}
+
+// --- 身分主線（goals.mainline，只有一份；年度頁、目標對話框、專案卡片、總覽都讀它）---
+export const MAINLINE_SUGGEST_MAX = 3; // 建議上限：超過時提示、要使用者確認，但不硬擋
+/** 目前所有主線（不分年份；放棄的不算） */
+export const mainlineGoals = (goals) => goals.filter((g) => g.mainline && g.status !== 'dropped')
+  .sort((a, b) => (a.status === 'done') - (b.status === 'done') || (a.created_at || '').localeCompare(b.created_at || ''));
+/**
+ * 某一年可以勾成主線的候選：未放棄、未達成、還不是主線，且
+ * (1) period 是這一年或這一年的季／月（'2026'、'2026-Q1'、'2026-03'），或
+ * (2) 沒有 period、但掛在專案底下（長期目標通常掛專案、不指定期間）。
+ * 有 period 但屬於別年的不列（避免把去年的目標拉進今年的主線）。
+ */
+export function mainlineCandidates(goals, year) {
+  const y = String(year);
+  return goals.filter((g) => !g.mainline && g.status === 'active'
+    && (g.period ? g.period.slice(0, 4) === y : Boolean(g.project_id)))
+    .sort((a, b) => (a.period || '').localeCompare(b.period || '') || (a.created_at || '').localeCompare(b.created_at || ''));
+}
+export async function setGoalMainline(id, on) {
+  const rows = must(await supabase.from('goals').update({ mainline: Boolean(on) }).eq('id', id).select('id, mainline'));
+  if (rows.length !== 1) throw new Error(`預期更新 1 個目標，實際 ${rows.length} 個（可能已被刪除）`);
+  return rows[0];
 }
 
 // --- Future Log ---
@@ -1497,7 +1643,7 @@ export function yearStats({ year, tasks, entries, goals, habitLogs, media, areas
 // --- 垃圾桶：刪除前把那筆＋底下會被連帶刪除的資料＋會被取消的關聯存起來，30 天內可還原 ---
 export const TRASH_DAYS = 30;
 const TRASH_SPEC = {
-  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id' }, setnull: { time_entries: 'task_id' } },
+  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id' } },
   projects: { label: (r) => r.name, setnull: { tasks: 'project_id', goals: 'project_id', habits: 'project_id' } },
   goals: { label: (r) => r.title, setnull: { tasks: 'goal_id', habits: 'goal_id' } },
   habits: { label: (r) => r.name, cascade: { habit_logs: 'habit_id' } },
@@ -1512,10 +1658,12 @@ const TRASH_SPEC = {
   future_events: { label: (r) => r.title },
   inbox_items: { label: (r) => r.title || r.url || (r.body || '').slice(0, 40) },
   routine_phrases: { label: (r) => (r.body || '').slice(0, 40) },
+  reflections: { label: (r) => `${REFLECT_KINDS[r.kind] || '便籤'}・${(r.event || '').split('\n')[0].slice(0, 40) || '（沒寫事件）'}` },
 };
 export const TRASH_LABELS = { tasks: '任務', projects: '專案', goals: '目標', habits: '習慣', notes: '靈感', contacts: '跟進對象',
   contact_stages: '跟進階段', work_tags: '標籤', task_memos: '進度 memo', time_entries: '計時', media_items: '書影單',
-  bucket_items: '想做清單', future_events: 'Future Log', inbox_items: '收件匣', routine_phrases: '常用詞組' };
+  bucket_items: '想做清單', future_events: 'Future Log', inbox_items: '待看清單', routine_phrases: '常用詞組',
+  reflections: '內在整理' };
 
 /** 刪除一筆：先存進垃圾桶，再刪除。areas 不走這裡（領域有任務掛著時資料庫會擋） */
 export async function trashDelete(table, id) {
@@ -1927,7 +2075,7 @@ export const TAG_SCOPES = {
   media: { table: 'media_items', col: 'tags', array: true, label: '書影單標籤', unit: '筆書影單', title: (r) => r.title },
   contact: { table: 'contacts', col: 'tags', array: true, label: '跟進對象標籤', unit: '位跟進對象', title: (r) => r.name },
   bucket: { table: 'bucket_items', col: 'category', array: false, label: '想做清單分類', unit: '項想做的事', title: (r) => r.title },
-  inbox: { table: 'inbox_items', col: 'category', array: false, label: '收件匣分類', unit: '筆收件匣', title: (r) => r.title || r.url || (r.body || '').slice(0, 40) },
+  inbox: { table: 'inbox_items', col: 'category', array: false, label: '待看清單分類', unit: '筆待看清單', title: (r) => r.title || r.url || (r.body || '').slice(0, 40) },
 };
 function tagScope(scope) {
   const s = TAG_SCOPES[scope];
@@ -2028,7 +2176,7 @@ export const TAG_AREA_REFS = [
   { table: 'tasks', restrict: true }, { table: 'time_entries', restrict: true },
   { table: 'projects', restrict: true }, { table: 'goals', restrict: true },
   { table: 'habits' }, { table: 'notes' }, { table: 'media_items' }, { table: 'bucket_items' },
-  { table: 'future_events' }, { table: 'inbox_items' },
+  { table: 'future_events' }, { table: 'inbox_items' }, { table: 'reflections' },
 ];
 /** { [areaId]: { [table]: 筆數 } }；還沒建立的表當 0 */
 export async function tagAreaUsage() {
@@ -2429,3 +2577,128 @@ export async function sheetImportRun(plan, { areaId } = {}) {
 // 舊名稱（CFA 專用時期）保留給既有呼叫：CSV 文字 → 預覽／寫入
 export const cfaPlanImport = (text, ctx) => sheetImportPlan(cfaParseCSV(text), ctx);
 export const cfaRunImport = sheetImportRun;
+
+// ===== 內在整理 20261108（顯化規劃・階段三；migration 20261108_manifest.sql）=====
+// 三種便籤共用 reflections 表；各便籤自己的欄位放在 fields（jsonb）。UI 只呼叫這裡，統計也在這裡算。
+export const REFLECT_KINDS = { mindshift: '轉念', release: '釋放', allow: '我允許' };
+export const REFLECT_WANTS = { safety: '想要安全', approval: '想要認同', control: '想要控制' };
+// 常見情緒詞（自己整理，依「想要」分組；使用者也可以自己輸入）
+export const REFLECT_EMOTIONS = {
+  safety: ['害怕', '焦慮', '擔心', '不安', '緊張', '慌張', '無助', '脆弱', '退縮', '心神不寧', '提心吊膽', '不知所措', '懷疑', '沒有把握'],
+  approval: ['委屈', '自卑', '羞愧', '尷尬', '難過', '失落', '孤單', '被忽略', '嫉妒', '自責', '不被理解', '受傷', '丟臉', '比較心'],
+  control: ['生氣', '煩躁', '不耐煩', '挫折', '怨懟', '憤怒', '急躁', '緊繃', '不甘心', '懊惱', '失控', '無力', '想證明', '放不下'],
+};
+// 各便籤在 fields 裡的欄位（其他鍵不存）
+const REFLECT_FIELDS = { mindshift: ['facts', 'imagined', 'ideal', 'rebut'], release: ['body'], allow: ['but', 'rebut'] };
+const REFLECT_MAX = 4000; // 每個文字欄的上限
+
+/** 便籤標題：事件第一行，沒寫就用類型 */
+export const reflectionTitle = (r) => (r.event || '').trim().split('\n')[0].slice(0, 80) || `（${REFLECT_KINDS[r.kind] || '便籤'}，沒寫事件）`;
+
+/** 全部便籤：新到舊（日期，同一天依建立時間） */
+export async function listReflections() {
+  const rows = must(await supabase.from('reflections').select('*'));
+  return rows.sort((a, b) => b.entry_date.localeCompare(a.entry_date) || String(b.created_at).localeCompare(String(a.created_at)));
+}
+
+/** 整理成可寫入的列（清掉不屬於這種便籤的欄位、檢查範圍） */
+function reflectionRow(r) {
+  if (!REFLECT_KINDS[r.kind]) throw new Error('便籤類型不正確');
+  const text = (v) => {
+    const t = (v ?? '').toString().trim();
+    if (t.length > REFLECT_MAX) throw new Error(`每一格最多 ${REFLECT_MAX} 字`);
+    return t || null;
+  };
+  const day = r.entry_date || today();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('日期格式不正確');
+  const fields = {};
+  for (const k of REFLECT_FIELDS[r.kind]) { const v = text(r.fields?.[k]); if (v) fields[k] = v; }
+  const level = (v, label) => {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 0 || n > 10) throw new Error(`${label}請填 0～10`);
+    return n;
+  };
+  const isRelease = r.kind === 'release';
+  const wants = isRelease ? [...new Set(r.wants || [])] : [];
+  if (wants.some((w) => !REFLECT_WANTS[w])) throw new Error('「想要」只能選安全、認同、控制');
+  const emotions = isRelease ? [...new Set((r.emotions || []).map((e) => String(e).trim()).filter(Boolean))] : [];
+  if (emotions.some((e) => e.length > 20)) throw new Error('情緒詞每個最多 20 字');
+  const count = isRelease ? Number(r.release_count || 0) : 0;
+  if (!Number.isInteger(count) || count < 0) throw new Error('放下次數不正確');
+  const row = {
+    kind: r.kind, entry_date: day, event: text(r.event), fields, wants, emotions,
+    intensity_before: isRelease ? level(r.intensity_before, '開始時的強度') : null,
+    intensity_after: isRelease ? level(r.intensity_after, '結束時的強度') : null,
+    release_count: count, feeling_after: text(r.feeling_after), next_action: text(r.next_action),
+    updated_at: new Date().toISOString(),
+  };
+  if (!row.event && !Object.keys(fields).length && !row.feeling_after && !row.next_action && !emotions.length) {
+    throw new Error('還沒寫任何內容');
+  }
+  return row;
+}
+
+/** 新增或更新一張便籤；更新後檢查筆數。task_id 只由 reflectionToTask 寫，這裡不碰 */
+export async function saveReflection(r) {
+  const row = reflectionRow(r);
+  if (!r.id) return must(await supabase.from('reflections').insert(row).select().single());
+  const rows = must(await supabase.from('reflections').update(row).eq('id', r.id).select());
+  if (rows.length !== 1) throw new Error(`預期更新 1 張便籤，實際 ${rows.length} 張`);
+  return rows[0];
+}
+
+/** 刪除：先進垃圾桶，30 天內可還原 */
+export const deleteReflection = (id) => trashDelete('reflections', id);
+
+/** 歷史清單篩選：類型、關鍵字（事件、各欄、情緒、感受、下一步）、日期區間 */
+export function filterReflections(rows, { kind = '', q = '', from = '', to = '' } = {}) {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return rows.filter((r) => {
+    if (kind && r.kind !== kind) return false;
+    if (from && r.entry_date < from) return false;
+    if (to && r.entry_date > to) return false;
+    if (!words.length) return true;
+    const hay = [r.event, ...Object.values(r.fields || {}), ...(r.emotions || []), r.feeling_after, r.next_action,
+      ...(r.wants || []).map((w) => REFLECT_WANTS[w])].filter(Boolean).join('\n').toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+
+/**
+ * 近 N 天（含今天，依 entry_date）統計：
+ * - wants：三種「想要」各出現幾張（只算釋放便籤），由多到少
+ * - emotions：情緒詞出現次數前 top 名
+ * - release：開始、結束強度都有填的釋放便籤，平均開始／結束強度與平均下降（保留一位小數）
+ */
+export function reflectionStats(rows, { days = 30, top = 5, day = today() } = {}) {
+  const from = addDays(day, -(days - 1));
+  const recent = rows.filter((r) => r.entry_date >= from && r.entry_date <= day);
+  const byKind = Object.fromEntries(Object.keys(REFLECT_KINDS).map((k) => [k, recent.filter((r) => r.kind === k).length]));
+  const wants = Object.keys(REFLECT_WANTS).map((k) => ({ key: k, label: REFLECT_WANTS[k], n: recent.filter((r) => (r.wants || []).includes(k)).length }))
+    .filter((w) => w.n).sort((a, b) => b.n - a.n);
+  const em = new Map();
+  for (const r of recent) for (const e of r.emotions || []) em.set(e, (em.get(e) || 0) + 1);
+  const emotions = [...em].map(([word, n]) => ({ word, n })).sort((a, b) => b.n - a.n || a.word.localeCompare(b.word, 'zh-Hant')).slice(0, top);
+  const pairs = recent.filter((r) => r.kind === 'release' && r.intensity_before != null && r.intensity_after != null);
+  const avg = (xs) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
+  const before = avg(pairs.map((r) => r.intensity_before));
+  const after = avg(pairs.map((r) => r.intensity_after));
+  return {
+    from, to: day, total: recent.length, byKind, wants, emotions,
+    release: { n: pairs.length, before, after, drop: pairs.length ? Math.round((before - after) * 10) / 10 : null,
+      times: recent.filter((r) => r.kind === 'release').reduce((n, r) => n + (r.release_count || 0), 0) },
+  };
+}
+
+/** 下一步轉成任務：選領域、可填到期日；建立後把便籤的 task_id 設成新任務（檢查筆數） */
+export async function reflectionToTask(ref, { title, area_id, due_date }, existing = []) {
+  if (ref.task_id && existing.some((t) => t.id === ref.task_id)) throw new Error('這張便籤已經轉過任務了');
+  const day = ref.entry_date || today();
+  const notes = [`來自內在整理：${REFLECT_KINDS[ref.kind]}（${day.replaceAll('-', '/')}）`, ref.event ? `事件：${reflectionTitle(ref)}` : '']
+    .filter(Boolean).join('\n');
+  const task = await createTask({ title: (title || ref.next_action || '').trim().slice(0, 200), area_id, due_date: due_date || null, notes }, existing);
+  const rows = must(await supabase.from('reflections').update({ task_id: task.id, updated_at: new Date().toISOString() }).eq('id', ref.id).select());
+  if (rows.length !== 1) throw new Error(`任務已建立，但便籤沒有連上（預期 1 張，實際 ${rows.length} 張）`);
+  return { task, reflection: rows[0] };
+}

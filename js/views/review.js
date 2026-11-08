@@ -1,4 +1,5 @@
-// M5 每日復盤（Phase 3）：數字全讀 daily_summary 與當天 time_entries（唯讀）；只有三個文字欄是手寫存檔
+// M5 每日復盤（Phase 3）：數字全讀 daily_summary 與當天 time_entries（唯讀）；只有文字欄是手寫存檔
+// 顯化規劃・階段一（20261108）：晚上多「里程碑／心想事成」「感恩」兩格；頁首顯示當天的今日身分與肯定語（和總覽同一筆 daily_reviews）
 import * as data from '../data.js';
 import { state } from '../store.js';
 import { $, esc, areaChip, linkify } from '../ui.js';
@@ -13,7 +14,15 @@ const FIELDS = [
   ['gains', '今日收獲', '今天做成了什麼、學到什麼？'],
   ['problems', '問題反思', '哪裡卡住？為什麼？'],
   ['tomorrow_improve', '明日改進', '明天要怎麼做得更好？'],
+  ['milestones', '里程碑／心想事成', '今天有什麼往終點身分靠近一步、或心想事成的事？'],
+  ['gratitude', '感恩', '今天想感謝的人、事、物'],
 ];
+// 早上那兩欄（總覽也能寫，同一筆資料）：這裡讓使用者補寫或修改過去某天的
+const INTENT_FIELDS = [
+  ['identity', '今日身分', '今天我是……'],
+  ['affirmation', '肯定語', '對自己說一句肯定的話'],
+];
+const ALL_FIELDS = [...FIELDS, ...INTENT_FIELDS];
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 // 心情／能量（Phase J）：寫入 daily_reviews 的 mood／energy（data.saveMood），年度手帳的 Year in Pixels 讀同一份
 const MOOD_ROWS = [['mood', '心情', data.MOOD_LEVELS], ['energy', '能量', data.ENERGY_LEVELS]];
@@ -31,6 +40,10 @@ export function mountReview(root) {
         <button class="btn-timer" id="rv-today">今天</button>
       </div>
     </header>
+    <form class="rv-intent" id="rv-intent" aria-label="這天的今日身分與肯定語">
+      ${INTENT_FIELDS.map(([k, label, ph]) => `<label><span>${label}</span><input name="${k}" maxlength="200" placeholder="${ph}" autocomplete="off"></label>`).join('')}
+      <p class="sub rv-intent-note">早上在<a href="#/overview">總覽</a>寫的就是這兩格（同一份資料）；也可以在這裡補寫。</p>
+    </form>
     <section class="stats stats-4">
       <div class="card stat"><div class="stat-label">任務總數</div><div class="stat-num" id="rv-total">—</div><div class="stat-note">當天完成，或當天到期／排程未完成</div></div>
       <div class="card stat"><div class="stat-label">完成率</div><div class="stat-num" id="rv-rate">—</div><div class="stat-note" id="rv-rate-note"></div></div>
@@ -70,6 +83,9 @@ export function mountReview(root) {
 
   ui.data = null;
   const form = $('#rv-form', root);
+  const intentForm = $('#rv-intent', root);
+  const fieldEl = (k) => form.elements[k] || intentForm.elements[k];
+  const dirtyKeys = new Set(); // 只存改過的欄位，避免蓋掉總覽剛存的今日身分
   const saveEl = $('#rv-save', root);
   const dateInput = $('#rv-date', root);
   let saveTimer = null;
@@ -123,6 +139,7 @@ export function mountReview(root) {
           <ul class="dg-list">${open.length ? open.map(taskLi).join('') : '<li class="sub">沒有</li>'}</ul></section>
         <section><h3>完成的任務 <span class="count">${done.length}</span></h3>
           <ul class="dg-list done">${done.length ? done.map(taskLi).join('') : '<li class="sub">沒有</li>'}</ul></section>
+        ${INTENT_FIELDS.some(([k]) => review?.[k]?.trim()) ? `<section class="dg-intent">${INTENT_FIELDS.filter(([k]) => review[k]?.trim()).map(([k, label]) => `<p><b>${label}：</b>${esc(review[k])}</p>`).join('')}</section>` : ''}
         <section class="dg-notes">${FIELDS.map(([k, label]) => note(k, label)).join('')}</section>
         <div class="dialog-actions">
           <button type="button" class="btn-ghost" data-close>關閉</button>
@@ -162,26 +179,36 @@ export function mountReview(root) {
   }
 
   // 自動儲存：停止輸入 0.8 秒後存；離開欄位時立刻存
-  form.addEventListener('input', () => {
-    dirtyDay = ui.day;
-    saveEl.textContent = '編輯中…';
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(flush, SAVE_DELAY);
-  });
-  form.addEventListener('focusout', () => flush());
+  for (const f of [form, intentForm]) {
+    f.addEventListener('input', (e) => {
+      if (!e.target.name) return;
+      if (dirtyDay && dirtyDay !== ui.day) dirtyKeys.clear();
+      dirtyDay = ui.day;
+      dirtyKeys.add(e.target.name);
+      saveEl.textContent = '編輯中…';
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flush, SAVE_DELAY);
+    });
+    f.addEventListener('focusout', () => flush());
+    f.addEventListener('submit', (e) => { e.preventDefault(); flush(); });
+  }
 
   async function flush() {
     clearTimeout(saveTimer);
     if (!dirtyDay) return;
     const day = dirtyDay;
+    const keys = [...dirtyKeys];
     dirtyDay = null;
-    const values = Object.fromEntries(FIELDS.map(([k]) => [k, form[k].value.trim() || null]));
+    dirtyKeys.clear();
+    if (!keys.length) return;
+    const values = Object.fromEntries(keys.map((k) => [k, fieldEl(k).value.trim() || null]));
     try {
       await data.saveReview(day, values);
       if (day === ui.day) saveEl.textContent = `已自動儲存 ${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
       loadHistory();
     } catch (e) {
       dirtyDay = day;
+      keys.forEach((k) => dirtyKeys.add(k));
       saveEl.textContent = `儲存失敗：${e.message}（會再試一次）`;
       saveTimer = setTimeout(flush, 3000);
     }
@@ -192,7 +219,7 @@ export function mountReview(root) {
     $('#rv-history', root).innerHTML = rows.length ? rows.map((r) => `
       <li><button type="button" class="rv-hist ${r.review_date === ui.day ? 'on' : ''}" data-day="${r.review_date}">
         <b>${formatShort(r.review_date)}（${WEEKDAYS[new Date(`${r.review_date}T12:00:00+08:00`).getUTCDay()]}）</b>
-        <span>${esc((r.gains || r.problems || r.tomorrow_improve || '').slice(0, 60))}</span>
+        <span>${esc((data.REVIEW_NOTE_KEYS.map((k) => r[k]).find((v) => v?.trim()) || '').slice(0, 60))}</span>
       </button></li>`).join('')
       : '<li class="empty">還沒有寫過復盤。寫下今天的收獲吧！</li>';
   }
@@ -210,8 +237,8 @@ export function mountReview(root) {
     const dayChanged = ui.data?.day !== day;
     ui.data = { day, summary, entries };
     // 換日一定換成那天的筆記；同一天的背景更新（例如別處完成任務）則不蓋掉正在輸入的內容
-    if (dayChanged || (dirtyDay !== day && !form.contains(document.activeElement))) {
-      for (const [k] of FIELDS) form[k].value = review?.[k] || '';
+    if (dayChanged || (dirtyDay !== day && !form.contains(document.activeElement) && !intentForm.contains(document.activeElement))) {
+      for (const [k] of ALL_FIELDS) fieldEl(k).value = review?.[k] || '';
       saveEl.textContent = review ? '' : '尚未填寫';
     }
 

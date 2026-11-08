@@ -4,7 +4,7 @@
 import * as config from '../config.js';
 import * as data from '../data.js';
 import { state, refreshTasks, refreshAreas } from '../store.js';
-import { $, esc, toast, linkLabel, pastedLink, confirmDialog } from '../ui.js';
+import { $, esc, toast, linkLabel, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js';
 import { today, formatShort, formatHMS } from '../dates.js';
 import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags } from './task-actions.js';
 import { openAreaDialog } from './area-dialog.js';
@@ -285,16 +285,33 @@ export function mountWorkBoard(root) {
     body.querySelector(`.wb-card[data-id="${id}"]`)?.focus();
   });
 
-  // 在工作名稱貼上帶連結的文字：自動拆成「工作名稱」＋「連結」
+  // 在工作名稱或連結欄貼上網址：網址放「連結」欄；帶超連結文字的拆成名稱，
+  // 只貼純網址且名稱還空著時，向 link-title 服務讀網頁標題（20261107；讀不到用網域＋路徑當暫時名稱）
+  const addForm = () => body.querySelector('.wb-add');
+  async function fillTitleFrom(url) {
+    const f = addForm();
+    if (!f || f.title.value.trim()) return;
+    f.title.placeholder = '讀取標題中…';
+    f.dataset.titleFor = url;
+    const { title, reason } = await data.fetchLinkTitle(url);
+    const g = addForm(); // 期間可能重畫過，重新找
+    if (!g) return;
+    if (g.dataset.titleFor === url) { delete g.dataset.titleFor; g.title.placeholder = '新接一件工作…'; }
+    // 使用者在等待時已自己輸入名稱、或換了別的網址，就不覆蓋
+    if (g.title.value.trim() || g.link.value.trim() !== url) return;
+    g.title.value = title || linkFallbackTitle(url);
+    toast(title ? '已帶入網頁標題，可再修改' : `讀不到網頁標題（${reason}），先用網址當名稱，可再修改`, !title);
+  }
   body.addEventListener('paste', (e) => {
-    if (!e.target.matches('.wb-add input[name=title]')) return;
+    if (!e.target.matches('.wb-add input[name=title], .wb-add input[name=link]')) return;
     const got = pastedLink(e.clipboardData);
     if (!got) return;
     e.preventDefault();
     const f = e.target.form;
     if (got.text) f.title.value = `${f.title.value} ${got.text}`.trim();
     f.link.value = got.url; // 連結欄是單行，新的取代舊的
-    toast(got.text ? '已把連結拆到「連結」欄' : '已把網址放進「連結」欄，請輸入工作名稱');
+    if (e.target.name === 'title' && f.title.value.trim()) toast(got.text ? '已把連結拆到「連結」欄' : '已把網址放進「連結」欄');
+    if (!f.title.value.trim()) fillTitleFrom(got.url);
   });
 
   // 在「新接」新增工作（自動給案件編號）
@@ -313,6 +330,9 @@ export function mountWorkBoard(root) {
       await data.createWorkTask({
         title: f.title.value, area_id: area.id, ...tags, due_date: f.due_date.value || null, links,
       }, state.tasks);
+      f.reset(); // 重畫會保留表單內容，送出成功後先清空
+      delete f.dataset.titleFor;
+      f.title.placeholder = '新接一件工作…';
       await refreshTasks();
       toast('已新增工作');
       body.querySelector('.wb-add input[name=title]')?.focus();
@@ -405,6 +425,8 @@ export function mountWorkBoard(root) {
     // 正在輸入新工作時不要整頁重畫
     const typing = body.querySelector('.wb-add input[name=title]');
     const draft = typing && typing === document.activeElement ? typing.value : null;
+    const oldForm = body.querySelector('.wb-add');
+    const keep = oldForm ? { link: oldForm.link.value, titleFor: oldForm.dataset.titleFor, title: oldForm.title.value } : null;
     const cols = data.boardColumns(state.tasks, state.areasById, day);
     const group = (g, title) => `
       <section class="wb-group wb-${g}">
@@ -419,6 +441,13 @@ export function mountWorkBoard(root) {
       </section>`;
     body.innerHTML = `<div class="wb-board">${group('today', '本日工作')}${group('next', '後續工作')}</div>
       <p class="sub wb-hint">拖曳卡片換欄（也可點卡片後按左右鍵）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點標題可編輯，「進度」記錄每天做到哪裡。</p>`;
+    // 重畫時保留還沒送出的連結與名稱（貼網址後正在讀標題時也不會中斷）
+    const form = body.querySelector('.wb-add');
+    if (form && keep) {
+      form.link.value = keep.link;
+      if (draft == null && keep.title) form.title.value = keep.title;
+      if (keep.titleFor) { form.dataset.titleFor = keep.titleFor; form.title.placeholder = '讀取標題中…'; }
+    }
     if (draft != null) {
       const input = body.querySelector('.wb-add input[name=title]');
       input.value = draft;

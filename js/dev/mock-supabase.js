@@ -21,7 +21,7 @@ const DEFAULTS = {
   notes: () => ({ area_id: null, body: null, category: null, tags: [], updated_at: now() }),
   habits: () => ({ area_id: null, target_per_week: 7, archived: false, project_id: null, goal_id: null }), // 20261106
   projects: () => ({ status: 'active', next_action: null, notes: null, updated_at: now(), start_date: null, end_date: null }),
-  goals: () => ({ due_date: null, status: 'active', period: null, project_id: null }), // period：20261105；project_id：20261106
+  goals: () => ({ due_date: null, status: 'active', period: null, project_id: null, mainline: false }), // period：20261105；project_id：20261106；mainline：20261108
   tasks: () => ({
     status: 'todo', priority: 2, starred: false, actual_min: 0, completed_at: null, notes: null,
     project_id: null, goal_id: null, due_date: null, scheduled_start: null, estimate_min: null, updated_at: now(),
@@ -29,9 +29,10 @@ const DEFAULTS = {
   }),
   work_tags: () => ({ color: '#667085', active: true, sort: 0, kind: 'type' }), // migration 20261104；kind：20261106
   routine_phrases: () => ({ sort: 0 }),
-  daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {}, mood: null, energy: null }),
+  daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {}, mood: null, energy: null,
+    identity: null, affirmation: null, milestones: null, gratitude: null }), // 20261108_manifest
   // migration 20261105_journal（Phase J）
-  period_reviews: () => ({ wins: null, lessons: null, next_focus: null, updated_at: now() }),
+  period_reviews: () => ({ wins: null, lessons: null, next_focus: null, updated_at: now(), vision_identity: null, vision_senses: {} }),
   future_events: () => ({ day: null, area_id: null }),
   media_items: () => ({ creator: null, release_year: null, cover_url: null, link_url: null, status: 'want', rating: null, review: null,
     started_on: null, finished_on: null, tags: [], area_id: null, note_id: null, sort_order: null, updated_at: now() }),
@@ -43,6 +44,9 @@ const DEFAULTS = {
   contacts: () => ({ stage_id: null, phone: null, line_id: null, ig: null, source: null, interests: null, tags: [], next_follow_on: null,
     last_contact_on: null, notes: null, archived: false, sort_order: null }),
   contact_logs: () => ({ kind: null, content: null, next_step: null }),
+  // migration 20261108_manifest
+  reflections: () => ({ entry_date: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), event: null, fields: {}, wants: [], emotions: [],
+    intensity_before: null, intensity_after: null, release_count: 0, feeling_after: null, next_action: null, task_id: null, area_id: null, updated_at: now() }),
 };
 
 function dailySummary(tasks, areas = []) {
@@ -73,6 +77,15 @@ function setDuration(e) {
 }
 function checkEntry(e) {
   if (e.ended_at && e.ended_at < e.started_at) return { code: '23514', message: 'new row violates check constraint "time_entries_check"' };
+  return null;
+}
+// migration 20261108_manifest：reflections 的 check（kind、wants 只能三值、強度 0～10、次數 ≥ 0）
+function checkReflection(r) {
+  const bad = (name) => ({ code: '23514', message: `new row for relation "reflections" violates check constraint "${name}"` });
+  if (!['mindshift', 'release', 'allow'].includes(r.kind)) return bad('reflections_kind_check');
+  if (!(r.wants || []).every((w) => ['safety', 'approval', 'control'].includes(w))) return bad('reflections_wants_check');
+  for (const c of ['intensity_before', 'intensity_after']) if (r[c] != null && !(r[c] >= 0 && r[c] <= 10)) return bad(`reflections_${c}_check`);
+  if (!(r.release_count >= 0)) return bad('reflections_release_count_check');
   return null;
 }
 // trg_rollup：重算相關任務的 actual_sec，actual_min 由總秒數換算
@@ -153,6 +166,9 @@ class Query {
         }
         // 20261106：還原垃圾桶時帶原本的 id，主鍵重複要報錯
         for (const r of out) if (rows.some((x) => x.id === r.id)) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.table}_pkey"` } };
+        if (this.table === 'reflections') {
+          for (const r of out) { const err = checkReflection(r); if (err) return { data: null, error: err }; }
+        }
         if (this.table === 'time_entries') {
           for (const r of out) {
             const err = checkEntry(r) || (r.ended_at == null && rows.some((x) => x.user_id === uid && x.ended_at == null)
@@ -176,6 +192,10 @@ class Query {
         for (const r of out) {
           const old = { ...r };
           Object.assign(r, this.payload);
+          if (this.table === 'reflections') {
+            const err = checkReflection(r);
+            if (err) { Object.assign(r, old); return { data: null, error: err }; }
+          }
           if (this.table === 'time_entries') {
             const err = checkEntry(r);
             if (err) { Object.assign(r, old); return { data: null, error: err }; }
@@ -198,7 +218,7 @@ class Query {
               return { data: null, error: { code: '23503', message: `update or delete on table "areas" violates foreign key constraint on table "${t}"` } };
             }
           }
-          for (const t of ['habits', 'notes', 'media_items', 'bucket_items', 'future_events', 'inbox_items']) {
+          for (const t of ['habits', 'notes', 'media_items', 'bucket_items', 'future_events', 'inbox_items', 'reflections']) {
             for (const r of db[t] || []) if (ids.has(r.area_id)) r.area_id = null;
           }
         }
@@ -215,6 +235,7 @@ class Query {
           goals: [['tasks', 'goal_id'], ['habits', 'goal_id']],
           work_tags: [['tasks', 'work_type_id'], ['tasks', 'work_project_tag_id']],
           contact_stages: [['contacts', 'stage_id']],
+          tasks: [['reflections', 'task_id']], // 20261108：內在整理的「下一步轉任務」
         }[this.table];
         if (SET_NULL) {
           const ids = new Set(out.map((r) => r.id));
@@ -280,11 +301,21 @@ export function createMockClient() {
   };
   const client = {
     uid: () => getSess()?.user.id,
-    // Edge Functions 在模擬模式無法使用；google-sync 改成產生幾筆範例會議，方便看日曆畫面
+    // Edge Functions 在模擬模式無法使用；google-sync 改成產生幾筆範例會議，方便看日曆畫面；link-title 回假標題
     functions: {
-      async invoke(name) {
+      async invoke(name, { body } = {}) {
         const uid = client.uid();
         if (!uid) return { data: null, error: { message: 'not authenticated' } };
+        // link-title（讀網頁標題）的模擬：網址含 notitle → 讀不到；含 nofn → 模擬函式還沒部署（404）；其他回假標題
+        if (name === 'link-title') {
+          await new Promise((r) => { setTimeout(r, 400); });
+          const url = String(body?.url || '');
+          if (/nofn/.test(url)) return { data: null, error: { message: 'Function not found' } };
+          if (/notitle/.test(url)) return { data: { title: '', error: '網站回應 403' }, error: null };
+          let host = url;
+          try { host = new URL(url).hostname; } catch { return { data: { title: '', error: '網址格式不正確' }, error: null }; }
+          return { data: { title: `（模擬標題）${host} 的網頁` }, error: null };
+        }
         if (name === 'google-oauth-start') return { data: { error: '模擬模式無法連結 Google 帳號（需要部署到 Supabase）' }, error: null };
         if (name !== 'google-sync') return { data: null, error: { message: 'Function not found' } };
         const db = load();

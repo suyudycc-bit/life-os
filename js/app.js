@@ -21,6 +21,7 @@ import { mountYear } from './views/year.js';
 import { mountContacts } from './views/contacts.js';
 import { mountInbox } from './views/inbox.js';
 import { mountTags } from './views/tags.js';
+import { mountReflect } from './views/reflect.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -36,7 +37,7 @@ const ICONS = {
   year: '<path d="M4 4h16v16H4z"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
   stats: '<path d="M12 4a8 8 0 1 0 8 8h-8z"/><path d="M15 3.5A6 6 0 0 1 20.5 9H15z"/>',
   review: '<path d="M5 19.5 6 15 16.5 4.5a2 2 0 0 1 3 3L9 18z"/><path d="M14.5 6.5l3 3"/>',
-  // 收件匣：托盤＋往下的箭頭（分享進來）
+  // 收件匣（畫面上叫「待看清單」）：托盤＋往下的箭頭（分享進來）
   inbox: '<path d="M4 13.5 6.5 5h11l2.5 8.5V19H4z"/><path d="M4 13.5h4.5l1 2h5l1-2H20M12 3.5v6.5M9.5 7.5 12 10l2.5-2.5"/>',
   notes: '<path d="M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3z"/><path d="M9.5 20h5"/>',
   media: '<path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/><path d="M15 9.5h2.5M15 12.5h2.5"/>',
@@ -45,6 +46,8 @@ const ICONS = {
   // 跟進對象：一個人＋名單橫線
   contacts: '<path d="M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M3 20c.5-3.5 3-5.5 6-5.5s5.5 2 6 5.5"/><path d="M16 6h5M16 9.5h5M18 13h3"/>',
   month: '<path d="M5 4h14v16H5z"/><path d="M8 4v16"/><path d="M11 8.5h5M11 12h5M11 15.5h3"/>',
+  // 內在整理：一張摺角便籤＋一道起伏（情緒）
+  reflect: '<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/><path d="M8 9.5c1.2-1.6 2.6-1.6 3.8 0s2.6 1.6 3.8 0"/>',
   bucket: '<path d="M6 4h12v16l-6-4-6 4z"/><path d="m9.5 9.5 2 2 3.5-3.5"/>',
   // 標籤與分類：一張吊牌
   tags: '<path d="M4 4h7l9 9-7 7-9-9z"/><path d="M8 8h.01"/>',
@@ -55,11 +58,12 @@ const ICONS = {
 const icon = (id) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${ICONS[id] || '<path d="M6 6h12v12H6z"/>'}</svg>`;
 
 const ROUTES = [
-  // group：側欄分組（今天要做的 → 計畫 → 回顧 → 收藏 → 其他）
+  // group：側欄分組（今天要做的 → 計畫 → 回顧 → 收藏 → 設定 → 其他）
+  // 20261107：任務管理不再顯示未完成數量（使用者覺得有壓力）；跟進對象暫放最下面的「其他」（使用者還在想怎麼管理），
+  // 原本的「其他」（標籤、備份、說明）改叫「設定」。
   { id: 'overview', label: '總覽', mount: mountOverview, group: '今天' },
-  { id: 'tasks', label: '任務管理', mount: mountTasks, badge: true, group: '今天' },
+  { id: 'tasks', label: '任務管理', mount: mountTasks, group: '今天' },
   { id: 'workboard', label: '工作看板', mount: mountWorkBoard, group: '今天' },
-  { id: 'contacts', label: '跟進對象', mount: mountContacts, group: '今天' },
   { id: 'projects', label: '專案與目標', mount: mountProjects, group: '計畫' },
   { id: 'calendar', label: '日曆', mount: mountCalendar, group: '計畫' },
   { id: 'month', label: '月度手帳', mount: mountMonth, group: '計畫' },
@@ -67,13 +71,15 @@ const ROUTES = [
   { id: 'review', label: '每日復盤', mount: mountReview, group: '回顧' },
   { id: 'stats', label: '時間統計', mount: mountStats, group: '回顧' },
   { id: 'habits', label: '習慣養成', mount: mountHabits, group: '回顧' },
-  { id: 'inbox', label: '收件匣', mount: mountInbox, group: '收藏', badge: true },
+  { id: 'reflect', label: '內在整理', mount: mountReflect, group: '回顧' }, // 20261108 顯化規劃・階段三
+  { id: 'inbox', label: '待看清單', mount: mountInbox, group: '收藏', badge: true },
   { id: 'notes', label: '靈感知識庫', mount: mountNotes, group: '收藏' },
   { id: 'media', label: '書影單', mount: mountMedia, group: '收藏' },
   { id: 'bucket', label: '想做清單', mount: mountBucket, group: '收藏' },
-  { id: 'tags', label: '標籤與分類', mount: mountTags, group: '其他' },
-  { id: 'backup', label: '數據與備份', mount: mountBackup, group: '其他' },
-  { id: 'guide', label: '使用說明', mount: mountGuide, group: '其他' },
+  { id: 'tags', label: '標籤與分類', mount: mountTags, group: '設定' },
+  { id: 'backup', label: '數據與備份', mount: mountBackup, group: '設定' },
+  { id: 'guide', label: '使用說明', mount: mountGuide, group: '設定' },
+  { id: 'contacts', label: '跟進對象', mount: mountContacts, group: '其他' },
 ];
 
 let unsubscribe = null;
@@ -135,11 +141,6 @@ function syncNavFold() {
     btn.setAttribute('aria-expanded', String(!folded));
     btn.title = `${folded ? '展開' : '收合'}「${sec.dataset.group}」`;
   });
-}
-
-function updateBadge() {
-  const n = data.openCount(state.life.tasks); // 工作的數量在工作看板，不算在任務管理
-  setNavBadge('tasks', n, `${n} 件未完成`);
 }
 
 /** 收件匣徽章：放超過 7 天還沒點開的筆數（inbox_items 不在 store，登入後、換頁、收件匣有變動時重算） */
@@ -304,7 +305,6 @@ function handleSession(session) {
 
 renderNav();
 syncNavFold();
-subscribe(updateBadge);
 subscribe(updateRunningBar);
 watchStatNumbers($('#main'));
 window.addEventListener('hashchange', () => { if (loadedFor) route(); });
