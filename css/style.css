@@ -1816,6 +1816,7 @@ dialog .tg-pick label.check { flex-direction: row; align-items: flex-start; colo
 @media (max-width: 760px) {
   .rv-intent { grid-template-columns: minmax(0, 1fr); }
   .rv-form label, .rv-form label:nth-child(n+4) { grid-column: 1 / -1; }
+}
 /* ===== 內在整理 ===== */
 /* views/reflect.js（20261108 顯化規劃・階段三）：三種便籤像貼在手帳頁上的小紙條。
    類型用藍黑墨水小章（轉念／釋放／我允許）＋左側一條紙色帶區分，不用朱紅（朱紅只給今天、超時、刪除）。 */
