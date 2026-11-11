@@ -34,12 +34,9 @@ export function openFeedbackDialog(item = null, onSaved = null) {
   dlg.innerHTML = `
     <form>
       <h2>${item ? '修改回饋' : '寫回饋'}</h2>
-      <p class="fb-page">頁面：<b>${esc(feedbackPageLabel(page))}</b></p>
       <div class="fb-kinds" role="group" aria-label="類型">${Object.entries(data.FEEDBACK_KINDS).map(([k, v]) =>
         `<button type="button" data-kind="${k}" aria-pressed="${k === kind}">${v}</button>`).join('')}</div>
-      <label>想說的話<textarea name="body" rows="6" maxlength="${data.FEEDBACK_MAX}" required
-        placeholder="哪裡不好用、想要什麼功能、看不懂的地方都可以寫；有截圖可以貼雲端網址">${esc(item?.body || '')}</textarea></label>
-      <p class="sub fb-note">寫完不會馬上有人看：下次你在 Claude Code 說「處理回饋」時才會一起處理。</p>
+      <label>想說的話<textarea name="body" rows="6" maxlength="${data.FEEDBACK_MAX}" required>${esc(item?.body || '')}</textarea></label>
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" data-cancel>取消</button>
         <button class="btn-primary">${item ? '儲存' : '送出'}</button>

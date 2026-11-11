@@ -1975,8 +1975,6 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 /* views/feedback.js：側欄底部「回饋」按鈕的對話框、#/feedback 清單；預覽版（site/preview/）的頁角標記 */
 .sidebar-foot #feedback-btn { margin-right: 14px; }
 .fb-dialog form { display: flex; flex-direction: column; gap: 10px; }
-.fb-page { font-size: 13px; color: var(--sub); }
-.fb-page b { color: var(--ink); }
 .fb-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
 .fb-kinds button {
   border: 1px solid var(--line); background: var(--paper-hi); border-radius: 999px; padding: 3px 14px;
@@ -1984,7 +1982,6 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 }
 .fb-kinds button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
 .fb-dialog textarea { resize: vertical; min-height: 110px; }
-.fb-note { font-size: 12.5px; }
 .fb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .fb-head > div { flex: 1 1 260px; min-width: 0; }
 .fb-tabs { margin-bottom: 10px; }
