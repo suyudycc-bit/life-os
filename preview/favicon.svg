@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Life OS 圖示：墨綠書布封面＋冷白手帳頁＋藍黑墨水勾勾＋朱紅書籤繩（說明見 docs/03-ui-guidelines.md） -->
+  <rect width="32" height="32" rx="6" fill="#173b34"/>
+  <rect x="7" y="5" width="18" height="22" rx="1.5" fill="#f6f8f5"/>
+  <path d="M11.2 16.4l3.4 3.4 6.4-7.4" fill="none" stroke="#1c2a4a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 5h3v6.5l-1.5-1.3-1.5 1.3z" fill="#c2392a"/>
+</svg>
