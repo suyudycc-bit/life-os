@@ -3,7 +3,7 @@
 // 從 iPhone 分享進來：iOS「捷徑」打開 #/inbox/share?text=<URL 編碼的分享內容>（安裝說明見 docs/12-ios-share-shortcut.md）。
 import * as data from '../data.js';
 import { state, refreshNotes, refreshTasks } from '../store.js';
-import { $, esc, toast, confirmDialog, linkLabel } from '../ui.js';
+import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js';
 
 const FILTER_KEY = 'lifeos-inbox-filter';
 const PENDING_KEY = 'lifeos-inbox-share'; // 未登入時先記住分享（sessionStorage），登入後繼續
@@ -334,13 +334,14 @@ export function mountInbox(root) {
     // 沒有標題和內容時，用去掉 https:// 的網址當標題（網域另外列在下面）
     const text = it.title || it.body || (it.url || '').replace(/^https?:\/\/(www\.)?/, '');
     const domain = it.url ? linkLabel(it.url) : '';
+    const href = safeHref(it.url); // 資安 20261111：不是 http(s) 的只顯示文字
     const tab = data.inboxTabOf(it);
     return `
       <li class="ib-item${stale ? ' is-stale' : ''}${tab === 'done' ? ' is-done' : ''}" data-id="${it.id}">
         <span class="ib-mark ib-src-${src}" title="${esc(data.INBOX_SOURCES[src])}" aria-label="來源：${esc(data.INBOX_SOURCES[src])}">${SOURCE_MARK[src] || '記'}</span>
         <div class="ib-main">
-          ${it.url
-            ? `<a class="ib-open ib-text" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">${esc(text || domain)}</a>`
+          ${href
+            ? `<a class="ib-open ib-text" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(text || domain)}</a>`
             : `<span class="ib-text">${esc(text)}</span>`}
           ${it.title && it.body ? `<span class="ib-body">${esc(it.body)}</span>` : ''}
           <span class="ib-meta">
@@ -351,7 +352,7 @@ export function mountInbox(root) {
           </span>
         </div>
         <span class="ib-acts">
-          ${it.url ? `<a class="btn-ghost ib-open" href="${esc(it.url)}" target="_blank" rel="noopener noreferrer">打開</a>` : ''}
+          ${href ? `<a class="btn-ghost ib-open" href="${esc(href)}" target="_blank" rel="noopener noreferrer">打開</a>` : ''}
           ${tab === 'done' ? '<button type="button" class="btn-ghost" data-act="undone">改回未處理</button>'
             : '<button type="button" class="btn-ghost" data-act="done">已處理</button>'}
           <button type="button" class="btn-ghost" data-act="note">轉靈感</button>

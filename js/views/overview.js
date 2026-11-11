@@ -1,12 +1,12 @@
 // M1 總覽（Phase 1：今日完成率、今日待辦數、最重要 3 件事、今日待辦清單）
 import * as data from '../data.js';
 import { state } from '../store.js';
-import { $, durationHTML, toast, esc, areaChip } from '../ui.js';
+import { $, durationHTML, toast, esc, areaChip, confirmDialog } from '../ui.js';
 import { refreshNotes, refreshTasks, refreshProjects } from '../store.js';
 import { habitRowHTML, bindHabitDays } from './habits.js';
 import { openNoteDialog } from './notes.js';
 import { openExternalEvent, extTime } from './google-sync.js';
-import { today, formatShort, localDate } from '../dates.js';
+import { today, formatShort, localDate, addDays } from '../dates.js';
 import { taskItemHTML } from './task-item.js';
 import { bindTaskList, openTaskEditor } from './task-actions.js';
 import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js';
@@ -59,6 +59,10 @@ export function mountOverview(root) {
       <button type="button" class="btn-ghost" id="ov-guide-close" aria-label="關閉使用說明提示">✕</button>
     </aside>
     <a class="ov-inbox" id="ov-inbox" href="#/inbox" hidden></a>
+    <section class="card ov-overdue" id="ov-overdue" aria-labelledby="ov-overdue-title" hidden>
+      <div class="day-head"><h2 id="ov-overdue-title">昨天沒做完</h2><a class="sub" href="#/month" id="ov-overdue-all" hidden>看全部 ›</a></div>
+      <ul class="task-list compact ovd-list" id="ov-overdue-list"></ul>
+    </section>
     <section class="stats">
       <div class="card stat">
         <div class="stat-label">今日任務完成率</div>
@@ -277,6 +281,53 @@ export function mountOverview(root) {
     $('#ov-mainline-note', root).innerHTML = notes.join('<br>');
   }
 
+  // ===== 昨天沒做完（20261111 B3）：已過期的生活任務；動作用月度遷移同一套函式（data.migrateTasks），只改任務本身 =====
+  const OVERDUE_SHOW = 5;
+  const overdueUl = $('#ov-overdue-list', root);
+  bindTaskList(overdueUl); // 勾選完成、點標題編輯：和其他任務清單同一套
+  overdueUl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-ovd]');
+    if (!btn) return;
+    const id = btn.closest('.task').dataset.id;
+    const t = state.tasks.find((x) => x.id === id);
+    if (!t) return;
+    const action = btn.dataset.ovd;
+    if (action === 'drop' && !(await confirmDialog(`把「${t.title}」標成「不做了」（放棄）？${state.running?.task_id === id ? '正在計時的會先停止。' : ''}`, '不做了'))) return;
+    btn.closest('.ovd-acts').querySelectorAll('button').forEach((b) => { b.disabled = true; });
+    try {
+      await data.migrateTasks([id], action, { targetDay: today(), tasks: state.tasks, running: state.running });
+      await refreshTasks(); // 重讀任務、計時與 daily_summary，今日欄的數字跟著更新
+      toast(action === 'forward' ? '已移到今天' : action === 'later' ? `已排到 ${formatShort(laterDay())}` : '已標成不做了');
+    } catch (err) {
+      btn.closest('.ovd-acts')?.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+      toast(err.message, true);
+    }
+  });
+  const laterDay = () => `${data.nextMonth(data.monthOf(today()))}-01`;
+  function renderOverdue(day) {
+    const { items, allYesterday } = data.overdueOverview(state.life.tasks, day);
+    const sec = $('#ov-overdue', root);
+    sec.hidden = !items.length;
+    if (!items.length) { overdueUl.innerHTML = ''; return; }
+    $('#ov-overdue-title', root).textContent = allYesterday ? `昨天沒做完：${items.length} 件` : `還沒做完的（已過期）：${items.length} 件`;
+    $('#ov-overdue-all', root).hidden = items.length <= OVERDUE_SHOW;
+    const later = formatShort(laterDay());
+    overdueUl.innerHTML = items.slice(0, OVERDUE_SHOW).map(({ task: t, day: d, daysLate }) => `
+      <li class="task ovd-item" data-id="${t.id}" data-open>
+        <input type="checkbox" class="task-done" aria-label="標記完成：${esc(t.title)}">
+        <div class="task-main">
+          <div class="task-title"><button type="button" class="ovd-title" data-act="edit" title="編輯任務">${esc(t.title)}</button></div>
+          <div class="task-meta">${areaChip(state.areasById[t.area_id])}
+            <span class="overdue">${d === addDays(day, -1) ? '昨天' : `過期 ${daysLate} 天`}（${formatShort(d)}）</span></div>
+        </div>
+        <span class="ovd-acts">
+          <button type="button" class="btn-ghost" data-ovd="forward" aria-label="移到今天：${esc(t.title)}">移到今天</button>
+          <button type="button" class="btn-ghost" data-ovd="later" title="排到下個月 ${later}" aria-label="排到之後（${later}）：${esc(t.title)}">排到之後</button>
+          <button type="button" class="btn-ghost danger" data-ovd="drop" aria-label="不做了：${esc(t.title)}">不做了</button>
+        </span>
+      </li>`).join('');
+  }
+
   bindTaskList($('#ov-top3', root));
   bindTaskList($('#ov-list', root));
   bindHabitDays($('#ov-habits', root));
@@ -357,6 +408,7 @@ export function mountOverview(root) {
     if (quoteDay !== day) { quoteDay = day; quoteIdx = quoteIndexOf(day); showQuote(); }
     if (intentDay !== day && intentLoading !== day) { intentLoading = day; loadIntent(day).finally(() => { intentLoading = null; }); }
     renderMainline();
+    renderOverdue(day);
     $('#ov-guide-tip', root).hidden = tipState === 'dismissed' || !(firstVisit || state.tasks.length === 0);
     // 生活的總覽：不含工作看板的工作（工作只留在工作看板）
     const { todo, top3 } = data.todayOverview(state.life.tasks, day);

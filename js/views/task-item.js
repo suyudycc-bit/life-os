@@ -1,5 +1,5 @@
 // 任務列（任務管理與總覽共用）
-import { esc, areaChip, PRIORITY, linkLabel, formatDateTime } from '../ui.js';
+import { esc, areaChip, PRIORITY, linkChip, formatDateTime } from '../ui.js';
 import { state } from '../store.js';
 import { taskDay, isOpen } from '../data.js';
 import { formatShort, formatTime, today, formatMin, formatHMS, formatClock } from '../dates.js';
@@ -36,7 +36,7 @@ export function taskItemHTML(t, areasById, { actions = true, draggable = false, 
         <span class="prio p${t.priority}">${PRIORITY[t.priority]}優先</span>
         ${when ? `<span class="${overdue ? 'overdue' : ''}">${overdue ? '已過期 ' : ''}${esc(when)}</span>` : ''}
         ${t.estimate_min || t.actual_sec ? `<span>${t.actual_sec ? `實際 ${formatHMS(t.actual_sec)}` : ''}${t.actual_sec && t.estimate_min ? '／' : ''}${t.estimate_min ? `預計 ${formatMin(t.estimate_min)}` : ''}</span>` : ''}
-        ${links.map((u) => `<a class="link-chip" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">🔗 ${esc(linkLabel(u))}</a>`).join('')}
+        ${links.map((u) => linkChip(u)).join('')}
       </div>
       ${latest ? `<div class="memo-latest" title="點「進度」看全部紀錄">📝 最新進度 <span class="memo-time">${formatDateTime(latest.created_at)}</span>：${esc(latest.body)}</div>` : ''}
     </div>

@@ -57,11 +57,14 @@ export async function openGoogleSyncDialog(onSynced) {
         <h3>① 把 Google 會議帶進 Life OS（唯讀）</h3>
         <p class="sub">到 Google 日曆 → 左側你的日曆旁「⋮」→ 設定和共用 → 整合日曆 → 複製「iCal 格式的私密網址」，貼在下面。
           這個網址等於日曆的鑰匙，不要給別人；外洩時可在同一處按「重設」。</p>
-        <form class="gs-ics">
+        ${s.google_ics_url ? `<p class="gs-ics-saved" data-ics-saved>已設定：<code title="完整網址不顯示在畫面上">${esc(data.maskIcsUrl(s.google_ics_url))}</code>
+          <button type="button" class="btn-ghost" data-ics-replace>更換網址</button></p>` : ''}
+        <form class="gs-ics"${s.google_ics_url ? ' hidden' : ''}>
           <input name="url" type="password" autocomplete="off" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
-            aria-label="iCal 格式的私密網址" value="${esc(s.google_ics_url || '')}">
+            aria-label="${s.google_ics_url ? '新的 iCal 格式私密網址' : 'iCal 格式的私密網址'}">
           <button type="button" class="btn-ghost" data-show>顯示</button>
           <button class="btn-timer">儲存</button>
+          ${s.google_ics_url ? '<button type="button" class="btn-ghost" data-ics-cancel>取消</button>' : ''}
         </form>
         ${s.google_ics_url ? `<button type="button" class="btn-ghost danger" data-unlink-ics>停止讀取並清除網址</button>` : ''}
         ${s.google_ics_url ? statusLine(s.last_pull_at, s.last_pull_count, s.last_pull_error, '個會議') : ''}
@@ -96,8 +99,24 @@ export async function openGoogleSyncDialog(onSynced) {
     input.type = input.type === 'password' ? 'text' : 'password';
     e.target.textContent = input.type === 'password' ? '顯示' : '隱藏';
   };
-  $('.gs-ics', dlg).onsubmit = async (e) => {
+  // 資安 20261111（C）：已存的私密網址只顯示遮罩；按「更換網址」才出現空白欄位貼新的
+  const icsForm = $('.gs-ics', dlg);
+  const icsSaved = $('[data-ics-saved]', dlg);
+  $('[data-ics-replace]', dlg)?.addEventListener('click', () => {
+    icsSaved.hidden = true;
+    icsForm.hidden = false;
+    icsForm.url.value = '';
+    icsForm.url.focus();
+  });
+  $('[data-ics-cancel]', dlg)?.addEventListener('click', () => {
+    icsForm.url.value = '';
+    icsForm.hidden = true;
+    icsSaved.hidden = false;
+  });
+  icsForm.onsubmit = async (e) => {
     e.preventDefault();
+    // 已設定時欄位一開始是空的：空白送出不能被當成「清除」（清除用下面的按鈕）
+    if (s.google_ics_url && !e.target.url.value.trim()) { toast('請貼上新的網址；要停止讀取請按「停止讀取並清除網址」', true); return; }
     try {
       await data.saveIcsUrl(e.target.url.value);
       toast(e.target.url.value.trim() ? '已儲存，按「立即同步」試試看' : '已清除');

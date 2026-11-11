@@ -40,9 +40,31 @@ export function confirmDialog(message, okLabel = '刪除') {
   });
 }
 
+/**
+ * 資安 20261111（C）：使用者資料要變成 href 前一律經過這裡。
+ * 只允許 http:／https:，回傳正規化後的網址；其他（javascript:、data:、相對路徑、壞掉的字串）回傳 ''，呼叫端改顯示純文字。
+ */
+export function safeHref(url) {
+  try {
+    const u = new URL(String(url ?? '').trim());
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : '';
+  } catch { return ''; }
+}
+
+/** 連結小標籤（🔗 網域）：網址不安全時只顯示文字、不產生連結 */
+export function linkChip(url, cls = 'link-chip') {
+  const h = safeHref(url);
+  return h
+    ? `<a class="${cls}" href="${esc(h)}" target="_blank" rel="noopener noreferrer" title="${esc(h)}">🔗 ${esc(linkLabel(h))}</a>`
+    : `<span class="${cls} link-unsafe" title="這個連結不是 http／https，不開啟">${esc(String(url ?? ''))}</span>`;
+}
+
 /** 先跳脫再把網址轉成連結（新分頁開啟） */
 export function linkify(text) {
-  return esc(text).replace(/https?:\/\/[^\s<]+/g, (u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u}</a>`);
+  return esc(text).replace(/https?:\/\/[^\s<]+/g, (u) => {
+    const h = safeHref(u.replace(/&(amp|lt|gt|quot|#39);/g, (m, k) => ({ amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" }[k])));
+    return h ? `<a href="${esc(h)}" target="_blank" rel="noopener noreferrer">${u}</a>` : u;
+  });
 }
 
 export function linkLabel(url) {
@@ -116,4 +138,9 @@ export function setNavBadge(routeId, n, label = '') {
     sum.textContent = total;
     sum.hidden = total === 0;
   }
+}
+
+/** 是不是預覽版（GitHub Pages 的 …/life-os/preview/，docs/15）：路徑裡有一段剛好叫 preview */
+export function isPreviewPath(pathname) {
+  return String(pathname || '').split('/').includes('preview');
 }

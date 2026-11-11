@@ -139,7 +139,7 @@ main {
   background-size: 18px 18px; background-position: -1px -1px;
   min-height: 100vh;
 }
-main > * { max-width: 1080px; }
+main > * { max-width: 1440px; } /* 20261111 B2：原 1080px，寬螢幕或網頁縮小（⌘−）時右邊大片空白 */
 .page-head { margin-bottom: 22px; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
 .page-head .sub { font-family: var(--f-num); font-size: 17px; letter-spacing: .04em; color: var(--sub); }
 /* 區塊＝紙上用墨線隔開的一段，不是浮起來的白卡片 */
@@ -1970,6 +1970,96 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
   .rf-chip:active, .rf-scale button:active, .rf-new-btn:active { transform: none; }
   .rf-count b.rf-bump { animation: none; }
 }
+
+/* ===== 回饋匣 20261111（D）===== */
+/* views/feedback.js：側欄底部「回饋」按鈕的對話框、#/feedback 清單；預覽版（site/preview/）的頁角標記 */
+.sidebar-foot #feedback-btn { margin-right: 14px; }
+.fb-dialog form { display: flex; flex-direction: column; gap: 10px; }
+.fb-page { font-size: 13px; color: var(--sub); }
+.fb-page b { color: var(--ink); }
+.fb-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-kinds button {
+  border: 1px solid var(--line); background: var(--paper-hi); border-radius: 999px; padding: 3px 14px;
+  font-size: 14px; color: var(--text-2); transition: background .15s, color .15s;
+}
+.fb-kinds button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.fb-dialog textarea { resize: vertical; min-height: 110px; }
+.fb-note { font-size: 12.5px; }
+.fb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
+.fb-head > div { flex: 1 1 260px; min-width: 0; }
+.fb-tabs { margin-bottom: 10px; }
+.fb-tabs small { font-family: var(--f-num); font-size: 13px; opacity: .8; }
+.fb-list { list-style: none; margin: 0; padding: 0; }
+.fb-list .empty { color: var(--sub); padding: 14px 6px; font-size: 14px; }
+.fb-item { display: flex; flex-direction: column; gap: 6px; padding: 12px 6px; border-bottom: 1px dashed color-mix(in srgb, var(--ink) 22%, transparent); }
+.fb-item[data-status=preview] { box-shadow: inset 3px 0 0 var(--link); background: color-mix(in srgb, var(--link) 5%, transparent); padding-left: 12px; }
+.fb-meta { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: baseline; font-size: 12.5px; color: var(--sub); }
+.fb-kind { border: 1px solid var(--line); border-radius: 3px; padding: 0 6px; background: var(--paper-hi); color: var(--ink); }
+.fb-kind[data-kind=bug] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); color: var(--danger); }
+.fb-status { margin-left: auto; font-weight: 700; color: var(--ink); }
+.fb-body { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text); }
+.fb-body a, .fb-reply a { color: var(--link); }
+.fb-reply { padding: 8px 12px; border-left: 2px solid var(--ok); background: color-mix(in srgb, var(--ok) 6%, var(--paper-hi)); font-size: 14px; }
+.fb-reply b { font-size: 12.5px; color: var(--ok); }
+.fb-reply p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.fb-wait { margin: 0; font-size: 13px; color: var(--link); }
+.fb-acts { display: flex; justify-content: flex-end; gap: 2px; }
+.fb-acts .btn-ghost { font-size: 13px; padding: 3px 8px; }
+/* 預覽版：右下角一條固定的螢光黃標籤＋頁面上緣一道虛線，不擋操作（pointer-events: none） */
+.preview-ribbon {
+  position: fixed; right: 12px; bottom: 12px; z-index: 1000; pointer-events: none;
+  background: var(--hl); color: #7a4f00; border: 1.5px dashed #c27a12; border-radius: 4px;
+  padding: 4px 12px; font-size: 13px; font-weight: 700; letter-spacing: .04em; box-shadow: 0 4px 14px rgba(18, 30, 40, .18);
+}
+.is-preview body { box-shadow: inset 0 4px 0 #c27a12; }
+
+/* ===== 知識庫／總覽／版面 20261111（B）===== */
+/* B2：內容區超過上限（1440px）時，多出來的寬度平均放在左右，不再全部空在右邊（只在電腦寬度；工作看板維持滿版） */
+@media (min-width: 761px) {
+  main { padding-inline: max(36px, calc((100% - 1440px) / 2)); }
+  main:has(.wb-board), main:has(.wb-frame) { padding-inline: 36px; }
+}
+/* B1：靈感對話框的自動儲存狀態 */
+.nt-save { font-size: 12.5px; text-align: right; }
+.nt-autosave-hint { font-size: 12px; }
+/* B3：總覽「昨天沒做完」 */
+.ovd-title { padding: 0; border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.ovd-title:hover { text-decoration: underline; }
+.ovd-acts { display: flex; flex-wrap: wrap; gap: 2px; flex: none; }
+.ovd-acts .btn-ghost { font-size: 13px; padding: 3px 8px; white-space: nowrap; }
+.ovd-acts .btn-ghost.danger { color: var(--sub); }
+.ovd-acts .btn-ghost.danger:hover { color: var(--danger); }
+@container tasklist (max-width: 560px) {
+  .ovd-acts { margin-left: 52px; }
+}
+
+/* ===== 工作看板接續與案件 20261111（A）===== */
+/* 卡片上的「接續」按鈕：放在卡片頂端案號那一列的右邊（底下操作列在窄欄已經放滿） */
+.wb-card-head .wb-cont { margin-left: auto; padding: 0 6px; font-size: 12px; line-height: 1.6; white-space: nowrap; }
+.wb-card-head .wb-star + .wb-cont { margin-left: 0; }
+/* 接續對話框：兩個選項並排，手機上換成上下 */
+.wb-continue-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 4px; }
+.wb-continue-choices button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 12px; }
+.wb-continue-choices small { font-size: 12px; font-weight: normal; opacity: .8; }
+@media (max-width: 520px) { .wb-continue-choices { grid-template-columns: 1fr; } }
+/* 案件總覽：一個案件有幾張每日卡 */
+.cs-cards { margin-left: 6px; font-size: 12px; color: var(--mute); white-space: nowrap; }
+/* 案件歷程：每日卡片清單 */
+.cs-cardlist { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+.cs-cardlist li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 0; border-top: 1px solid var(--line); }
+.cs-card-time { margin-left: auto; font-family: var(--f-num); color: var(--text-2); }
+
+/* ===== 資安 20261111（C）===== */
+/* 不是 http(s) 的連結：只顯示文字、不能點（ui.linkChip） */
+.link-unsafe { color: var(--sub); background: var(--wash); text-decoration: line-through; cursor: not-allowed; }
+.link-unsafe:hover { text-decoration: line-through; }
+/* 備份下載前的提醒（不擋操作） */
+.bk-private { margin: 8px 0 0; padding: 6px 10px; font-size: 13.5px; color: var(--text-2); background: var(--hl); border-left: 3px solid var(--danger); border-radius: 3px; }
+/* Google 日曆私密網址已設定時只顯示遮罩 */
+.gs-ics-saved { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.gs-ics-saved code { font-size: 13px; overflow-wrap: anywhere; }
+/* 被 iframe 嵌入時的說明（js/frame-guard.js） */
+.frame-notice { margin: 24px 16px; font-size: 15px; color: var(--text); }
 
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。

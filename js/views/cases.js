@@ -1,10 +1,10 @@
-// 案件總覽（Phase W4，工作看板的第二個分頁）：一個案件＝一個工作任務，含已完成的
+// 案件總覽（Phase W4，工作看板的第二個分頁）：一個案件＝同案號的所有工作任務（20261111 起可多張卡），含已完成的
 // 搜尋、篩選、排序、案件歷程（進度紀錄＋計時）、重複案件合併。搬自舊看板「案件總覽」（docs/08）。
 import * as data from '../data.js';
 import { state, refreshTasks } from '../store.js';
-import { $, esc, toast, confirmDialog, linkify, linkLabel, formatDateTime } from '../ui.js';
-import { formatShort, formatHMS } from '../dates.js';
-import { openTaskEditor, openMemoDialog, workTagsOf } from './task-actions.js';
+import { $, esc, toast, confirmDialog, linkify, linkChip, formatDateTime } from '../ui.js';
+import { formatShort, formatHMS, localDate } from '../dates.js';
+import { openTaskEditor, openMemoDialog, workTagsOf, openContinueDialog } from './task-actions.js';
 
 const PAGE = 50;
 const FILTER_KEY = 'lifeos-cases-filter';
@@ -13,7 +13,7 @@ try { Object.assign(f, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')); } 
 const saveF = () => { try { localStorage.setItem(FILTER_KEY, JSON.stringify(f)); } catch { /* 忽略 */ } };
 let shown = PAGE;
 
-const statusLabel = (t) => ({ todo: '待辦', doing: '進行中', done: '已完成', dropped: '放棄' })[t.status];
+const STATUS_LABEL = { todo: '待辦', doing: '進行中', done: '已完成', dropped: '放棄' };
 
 /** 在 box 裡畫案件總覽；回傳 render（資料更新時重畫，保留搜尋框焦點） */
 export function mountCases(box) {
@@ -90,35 +90,36 @@ export function mountCases(box) {
       const link = (t.links || [])[0];
       return `<tr data-id="${t.id}" tabindex="0" title="看案件歷程">
         <td class="cs-no">${esc(t.case_no || '—')}</td>
-        <td class="cs-title">${esc(t.title)}${link ? ` <a class="link-chip" href="${esc(link)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(linkLabel(link))}</a>` : ''}</td>
-        <td><span class="cs-st st-${t.status}">${statusLabel(t)}</span></td>
+        <td class="cs-title">${esc(r.title)}${link ? ` ${linkChip(link)}` : ''}</td>
+        <td><span class="cs-st st-${r.status}">${STATUS_LABEL[r.status]}</span>${r.tasks.length > 1 ? `<span class="cs-cards" title="這個案件有 ${r.tasks.length} 張每日卡">${r.tasks.length} 張卡</span>` : ''}</td>
         <td class="cs-tags">${esc([r.workType, r.projectTag && `#${r.projectTag}`, r.project].filter(Boolean).join('・') || '—')}</td>
         <td>${formatShort(r.lastDay)}</td>
         <td>${r.memoCount ? `${r.memoCount} 則` : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="6" class="empty">沒有符合條件的案件。換個條件，或清空搜尋。</td></tr>';
     $('#cs-more', box).hidden = list.length <= shown;
 
-    mergeGroups = data.mergeSuggestions(rows.filter((r) => r.task.status !== 'dropped'));
+    mergeGroups = data.mergeSuggestions(rows.filter((r) => r.status !== 'dropped'));
     const m = $('#cs-merge', box);
     m.hidden = !mergeGroups.length;
     m.innerHTML = mergeGroups.length ? `
       <h2>可能重複的案件 <span class="count">${mergeGroups.length}</span></h2>
-      <p class="sub">同一個工作名稱卻有好幾個案件編號。合併後會保留最早的編號，其他案件的進度紀錄與計時搬過去、連結合併，然後刪掉重複的。</p>
+      <p class="sub">同一個工作名稱卻有好幾個案件編號。合併後這些卡都改用最早的編號，變成同一個案件的多張卡；卡片、進度紀錄與計時都不動，也不刪任何卡。</p>
       <ul class="cs-merge-list">${mergeGroups.map((g) => `<li>
-        <span><b>${esc(g[0].task.title)}</b>　<span class="sub">${g.map((r) => `${esc(r.task.case_no || '無編號')}（${statusLabel(r.task)}）`).join('、')}</span></span>
+        <span><b>${esc(g[0].title)}</b>　<span class="sub">${g.map((r) => `${esc(r.task.case_no || '無編號')}（${STATUS_LABEL[r.status]}${r.tasks.length > 1 ? `・${r.tasks.length} 張卡` : ''}）`).join('、')}</span></span>
         <button type="button" class="btn-timer" data-merge="${g[0].task.id}">合併成 ${esc(g[0].task.case_no || '第一個')}</button></li>`).join('')}</ul>` : '';
   }
 
+  // 20261111：合併＝把後面幾個案件所有卡的案號改成最早的那個（不搬資料、不刪卡）
   async function mergeGroup(group) {
-    const [keep, ...drops] = group.map((r) => r.task);
-    const memoN = drops.reduce((n, t) => n + (state.memosByTask[t.id] || []).length, 0);
-    const msg = `把 ${drops.map((t) => t.case_no || '（無編號）').join('、')} 合併到 ${keep.case_no || '保留的案件'}？`
-      + `\n會搬 ${memoN} 則進度紀錄與這些案件的計時，合併連結，然後刪除 ${drops.length} 個重複案件。`;
+    const [keep, ...drops] = group;
+    const n = drops.reduce((k, r) => k + r.tasks.length, 0) + (keep.task.case_no ? 0 : keep.tasks.length);
+    const msg = `把 ${drops.map((r) => r.task.case_no || '（無編號）').join('、')} 合併到 ${keep.task.case_no || '新的案件編號'}？`
+      + `\n會把 ${n} 張卡的案件編號改成同一個；卡片、進度紀錄與計時都不動。`;
     if (!(await confirmDialog(msg, '合併'))) return;
     try {
-      const r = await data.mergeCases(keep, drops);
+      const r = await data.mergeCaseNos(keep, drops, state.tasks);
       await refreshTasks();
-      toast(`已合併：搬了 ${r.memos} 則進度、${r.entries} 筆計時，刪除 ${r.deleted} 個重複案件`);
+      toast(`已合併成 ${r.case_no}（改了 ${r.updated} 張卡的案件編號）`);
     } catch (err) { toast(`合併失敗：${err.message}`, true); }
   }
 
@@ -126,31 +127,47 @@ export function mountCases(box) {
   return render;
 }
 
-/** 案件歷程：基本資料、進度紀錄（時間軸）、計時 */
+/** 案件歷程：基本資料、每日卡片、進度紀錄（時間軸）、計時——同案號的所有卡合併顯示（20261111） */
 export async function openCase(taskId) {
-  const t = state.tasks.find((x) => x.id === taskId);
-  if (!t) return;
+  const first = state.tasks.find((x) => x.id === taskId);
+  if (!first) return;
+  const cards = data.caseTasks(state.tasks, first);
+  const t = data.caseLead(cards); // 代表卡：最新一張未完成的，否則最新一張
+  const latest = cards.at(-1);
   const dlg = $('#case-dialog');
-  dlg.innerHTML = `<div class="digest"><h2>${esc(t.case_no || '')} ${esc(t.title)}</h2><p class="sub">載入中…</p></div>`;
+  dlg.innerHTML = `<div class="digest"><h2>${esc(t.case_no || '')} ${esc(latest.title)}</h2><p class="sub">載入中…</p></div>`;
   if (!dlg.open) dlg.showModal();
   let entries = [];
-  try { entries = (await data.listEntriesForTask(t.id)).filter((e) => e.ended_at); } catch { /* 計時讀不到時只顯示其他資料 */ }
-  const memos = state.memosByTask[t.id] || [];
+  try { entries = (await data.listEntriesForTasks(cards.map((c) => c.id))).filter((e) => e.ended_at); } catch { /* 計時讀不到時只顯示其他資料 */ }
+  const memos = cards.flatMap((c) => state.memosByTask[c.id] || []).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
   const project = state.projects.find((p) => p.id === t.project_id)?.name;
   const workType = state.workTags.find((w) => w.id === t.work_type_id)?.label;
   const projectTag = state.workTags.find((w) => w.id === t.work_project_tag_id)?.label;
   const due = data.taskDay(t);
   const total = entries.reduce((n, e) => n + data.entrySeconds(e), 0);
+  const status = data.caseStatus(cards);
+  const links = [...new Map(cards.flatMap((c) => c.links || []).map((u) => [data.normLink(u), u])).values()]; // 同一個連結（大小寫、結尾斜線不同）只列一次
   const facts = [
-    ['狀態', statusLabel(t)], ['工作種類', workType], ['專案標籤', projectTag], ['專案', project], ['建立', formatDateTime(t.created_at)],
-    ['預定', due && formatShort(due)], ['完成', t.completed_at && formatDateTime(t.completed_at)], ['累計用時', total ? formatHMS(total) : null],
+    ['狀態', STATUS_LABEL[status]], ['工作種類', workType], ['專案標籤', projectTag], ['專案', project], ['建立', formatDateTime(cards[0].created_at)],
+    ['預定', data.isOpen(t) && due && formatShort(due)], ['完成', status === 'done' && latest.completed_at && formatDateTime(latest.completed_at)],
+    ['累計用時', total ? formatHMS(total) : null],
   ].filter(([, v]) => v);
+  const cardLine = (c) => {
+    const d = data.taskDay(c);
+    const when = c.status === 'done' && c.completed_at ? `完成 ${formatDateTime(c.completed_at)}`
+      : d ? `預定 ${formatShort(d)}` : c.board_parked ? '累積未完成' : '未排日期';
+    return `<li><span class="cs-st st-${c.status}">${STATUS_LABEL[c.status]}</span><span>${formatShort(localDate(c.created_at))} 建立・${esc(when)}</span>
+      ${c.title !== latest.title ? `<span class="sub">「${esc(c.title)}」</span>` : ''}${c.actual_sec ? `<span class="cs-card-time">${formatHMS(c.actual_sec)}</span>` : ''}</li>`;
+  };
+  const notes = [...new Set(cards.map((c) => c.notes).filter(Boolean))];
   dlg.innerHTML = `
     <div class="digest cs-detail">
-      <h2><span class="wb-case">${esc(t.case_no || '')}</span> ${esc(t.title)}</h2>
+      <h2><span class="wb-case">${esc(t.case_no || '')}</span> ${esc(latest.title)}</h2>
       <dl class="cs-facts">${facts.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>
-      ${(t.links || []).length ? `<p class="wb-links">${t.links.map((u) => `<a class="link-chip" href="${esc(u)}" target="_blank" rel="noopener noreferrer">🔗 ${esc(linkLabel(u))}</a>`).join('')}</p>` : ''}
-      ${t.notes ? `<p class="cs-notes">${linkify(t.notes)}</p>` : ''}
+      ${links.length ? `<p class="wb-links">${links.map((u) => linkChip(u)).join('')}</p>` : ''}
+      ${notes.map((n) => `<p class="cs-notes">${linkify(n)}</p>`).join('')}
+      ${cards.length > 1 ? `<section><h3>每日卡片 <span class="count">${cards.length}</span></h3>
+        <ol class="cs-cardlist">${cards.map(cardLine).join('')}</ol></section>` : ''}
       <section><h3>進度紀錄 <span class="count">${memos.length}</span></h3>
         <ol class="cs-timeline">${memos.length ? memos.map((m) => `<li><time>${formatDateTime(m.created_at)}</time><div>${linkify(m.body)}</div></li>`).join('')
           : '<li class="sub">還沒有進度紀錄</li>'}</ol></section>
@@ -158,6 +175,7 @@ export async function openCase(taskId) {
         <ul class="cs-entries">${entries.slice(0, 20).map((e) => `<li>${formatDateTime(e.started_at)}<span>${formatHMS(data.entrySeconds(e))}</span></li>`).join('')}</ul></section>` : ''}
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" data-close>關閉</button>
+        ${data.isOpen(t) ? '<button type="button" class="btn-timer" data-continue title="這張標完成，接續到明天或累積未完成（同案號）">⇢ 接續</button>' : ''}
         <button type="button" class="btn-timer" data-memo>新增進度</button>
         <button type="button" class="btn-primary" data-edit>編輯</button>
       </div>
@@ -165,6 +183,8 @@ export async function openCase(taskId) {
   $('[data-close]', dlg).onclick = () => dlg.close();
   $('[data-edit]', dlg).onclick = () => { dlg.close(); openTaskEditor(t); };
   $('[data-memo]', dlg).onclick = () => { dlg.close(); openMemoDialog(t.id); };
+  const cont = $('[data-continue]', dlg);
+  if (cont) cont.onclick = () => { dlg.close(); openContinueDialog(t); };
 }
 
 /** 常用詞組：一鍵複製；可新增、修改、刪除（搬自舊看板） */

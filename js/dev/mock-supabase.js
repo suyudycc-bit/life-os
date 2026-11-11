@@ -3,6 +3,7 @@
 // set_completed_at／計時相關觸發器、一個進行中計時的唯一索引、daily_summary view 與 migrations（sort_order、links、task_memos、20261104 工作看板欄位）。真正上線一律使用 Supabase。
 const DB_KEY = 'lifeos-mock-db';
 const SESSION_KEY = 'lifeos-mock-session';
+const SIGNED_OUT_KEY = 'lifeos-mock-signed-out'; // sessionStorage：這個分頁按過登出
 const TZ_OFFSET_MS = 8 * 3600 * 1000; // Asia/Taipei
 const MOCK_PASSWORD_MIN = 6; // Supabase Auth 預設最短密碼長度
 
@@ -46,7 +47,8 @@ const DEFAULTS = {
   contact_logs: () => ({ kind: null, content: null, next_step: null }),
   // migration 20261108_manifest
   reflections: () => ({ entry_date: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), event: null, fields: {}, wants: [], emotions: [],
-    intensity_before: null, intensity_after: null, release_count: 0, feeling_after: null, next_action: null, task_id: null, area_id: null, updated_at: now() }),
+    intensity_before: null, intensity_after: null, release_count: 0, feeling_after: null, next_action: null, task_id: null, area_id: null, updated_at: now() }),  // migration 20261111_feedback_box（回饋匣）
+  feedback: () => ({ page: null, kind: 'idea', status: 'new', reply: null, updated_at: null }),
 };
 
 function dailySummary(tasks, areas = []) {
@@ -86,6 +88,14 @@ function checkReflection(r) {
   if (!(r.wants || []).every((w) => ['safety', 'approval', 'control'].includes(w))) return bad('reflections_wants_check');
   for (const c of ['intensity_before', 'intensity_after']) if (r[c] != null && !(r[c] >= 0 && r[c] <= 10)) return bad(`reflections_${c}_check`);
   if (!(r.release_count >= 0)) return bad('reflections_release_count_check');
+  return null;
+}
+// migration 20261111_feedback_box 的 check
+function checkFeedback(r) {
+  const bad = (name) => ({ code: '23514', message: `new row for relation "feedback" violates check constraint "${name}"` });
+  if (typeof r.body !== 'string' || r.body.length < 1 || r.body.length > 4000) return bad('feedback_body_check');
+  if (!['bug', 'idea', 'question'].includes(r.kind)) return bad('feedback_kind_check');
+  if (!['new', 'doing', 'preview', 'done', 'wontfix'].includes(r.status)) return bad('feedback_status_check');
   return null;
 }
 // trg_rollup：重算相關任務的 actual_sec，actual_min 由總秒數換算
@@ -153,8 +163,8 @@ class Query {
             }
           }
         }
-        // migration 20261104：tasks (user_id, case_no) 唯一（null 不限）；20261106：work_tags 改成 (user_id, kind, label) 唯一
-        const uniq = { tasks: (x) => x.case_no, work_tags: (x) => `${x.kind || 'type'}|${x.label}` }[this.table];
+        // 20261106：work_tags 改成 (user_id, kind, label) 唯一（tasks 的 case_no 唯一已由 20261111_case_shared 拿掉）
+        const uniq = { work_tags: (x) => `${x.kind || 'type'}|${x.label}` }[this.table];
         if (uniq) {
           const seen = new Set(rows.filter((x) => x.user_id === uid).map(uniq).filter((v) => v != null));
           for (const r of out) {
@@ -168,6 +178,9 @@ class Query {
         for (const r of out) if (rows.some((x) => x.id === r.id)) return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.table}_pkey"` } };
         if (this.table === 'reflections') {
           for (const r of out) { const err = checkReflection(r); if (err) return { data: null, error: err }; }
+        }
+        if (this.table === 'feedback') {
+          for (const r of out) { const err = checkFeedback(r); if (err) return { data: null, error: err }; }
         }
         if (this.table === 'time_entries') {
           for (const r of out) {
@@ -194,6 +207,10 @@ class Query {
           Object.assign(r, this.payload);
           if (this.table === 'reflections') {
             const err = checkReflection(r);
+            if (err) { Object.assign(r, old); return { data: null, error: err }; }
+          }
+          if (this.table === 'feedback') {
+            const err = checkFeedback(r);
             if (err) { Object.assign(r, old); return { data: null, error: err }; }
           }
           if (this.table === 'time_entries') {
@@ -297,6 +314,7 @@ export function createMockClient() {
   const getSess = () => JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
   const setSess = (s) => {
     if (s) localStorage.setItem(SESSION_KEY, JSON.stringify(s)); else localStorage.removeItem(SESSION_KEY);
+    if (s) try { sessionStorage.removeItem(SIGNED_OUT_KEY); } catch { /* 忽略 */ }
     listeners.forEach((cb) => cb(s ? 'SIGNED_IN' : 'SIGNED_OUT', s));
   };
   const client = {
@@ -352,7 +370,8 @@ export function createMockClient() {
         save(db);
         return client.auth.signInWithPassword({ email, password });
       },
-      async signOut() { setSess(null); return { error: null }; },
+      // 資安 20261111（C）：登出後 app 會整頁重新載入；記在這個分頁，重新載入時不要又自動登入示範帳號
+      async signOut() { setSess(null); try { sessionStorage.setItem(SIGNED_OUT_KEY, '1'); } catch { /* 忽略 */ } return { error: null }; },
       // 照 supabase-js／Supabase Auth 的行為：沒登入回 Auth session missing!；
       // 新密碼少於 6 碼或與舊密碼相同時回錯誤；成功發出 USER_UPDATED
       async updateUser({ password } = {}) {
@@ -399,7 +418,9 @@ export function createMockClient() {
       setTimeout(() => listeners.forEach((cb) => cb('PASSWORD_RECOVERY', session)), 0);
     }
   }
-  if (!getSess()) {
+  let signedOut = false;
+  try { signedOut = sessionStorage.getItem(SIGNED_OUT_KEY) === '1'; } catch { /* 忽略 */ }
+  if (!getSess() && !signedOut) {
     const db = load();
     db.users[DEMO_EMAIL] ||= { id: uuid(), password: DEMO_PASSWORD };
     save(db);

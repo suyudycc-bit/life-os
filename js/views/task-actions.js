@@ -2,7 +2,7 @@
 import * as data from '../data.js';
 import { state, refreshTasks } from '../store.js';
 import { $, esc, toast, confirmDialog, linkify, formatDateTime, pastedLink } from '../ui.js';
-import { toLocalInput, fromLocalInput } from '../dates.js';
+import { toLocalInput, fromLocalInput, today, formatShort, localDate } from '../dates.js';
 
 async function run(fn, okMsg) {
   try {
@@ -273,4 +273,66 @@ export function openMemoDialog(taskId) {
   render();
   if (!dlg.open) dlg.showModal();
   $('textarea', dlg).focus();
+}
+
+// ===== 工作看板接續與案件沿用 20261111（A）=====
+/**
+ * 接續任務（今日歸今日）：問要接到「明天預計」還是「累積未完成」，再呼叫 data.continueTask。
+ * 原卡標完成留在今天的回報；新卡沿用同一個案件編號；進度紀錄留在原卡。
+ */
+export function openContinueDialog(task) {
+  const dlg = $('#board-dialog');
+  const next = data.nextWorkingDay(today());
+  dlg.innerHTML = `
+    <form class="wb-continue">
+      <h2>接續「${esc(task.title)}」</h2>
+      <p class="sub">今天這張會標成完成（留在今天的「已完成」和每日工作回報），另建一張${task.case_no ? `同案號 <b>${esc(task.case_no)}</b> ` : '同案號'}的新卡。
+        連結、說明、工作種類、專案標籤會帶過去；進度紀錄留在今天這張，案件總覽看得到全部。${state.running?.task_id === task.id ? '<br>這張正在計時，會先停止計時。' : ''}</p>
+      <div class="wb-continue-choices">
+        <button type="button" class="btn-primary" data-to="tomorrow">接續到明天<small>明天預計・${formatShort(next)}</small></button>
+        <button type="button" class="btn-timer" data-to="backlog">接續到累積未完成<small>不設日期</small></button>
+      </div>
+      <div class="dialog-actions"><button type="button" class="btn-ghost" data-cancel>取消</button></div>
+    </form>`;
+  $('[data-cancel]', dlg).onclick = () => dlg.close();
+  dlg.querySelectorAll('[data-to]').forEach((b) => {
+    b.onclick = async () => {
+      dlg.querySelectorAll('button').forEach((x) => { x.disabled = true; });
+      try {
+        const r = await data.continueTask(task, b.dataset.to, { tasks: state.tasks, running: state.running });
+        dlg.close();
+        await refreshTasks();
+        toast(`已接續到「${data.CONTINUE_TARGETS[b.dataset.to]}」（${r.case_no}），今天這張標成完成`);
+      } catch (err) {
+        dlg.querySelectorAll('button').forEach((x) => { x.disabled = false; });
+        toast(err.message, true);
+      }
+    };
+  });
+  dlg.showModal();
+}
+
+/** 新增工作時標題和既有案件相同：問是不是同一個案件。回傳 'same'／'new'／null（取消、不新增） */
+export function askSameCase(match) {
+  const dlg = $('#board-dialog');
+  const t = match.task;
+  dlg.innerHTML = `
+    <form class="wb-samecase">
+      <h2>這是不是同一個案件 ${esc(match.case_no)}？</h2>
+      <p class="sub">已經有一件同名的工作「${esc(t.title)}」（${esc(match.case_no)}，${formatShort(localDate(t.created_at))} 建立）。
+        同一個案件會沿用這個編號，案件總覽合併顯示；新案件會給下一個編號。</p>
+      <div class="dialog-actions">
+        <button type="button" class="btn-ghost" data-v="">取消</button>
+        <button type="button" class="btn-timer" data-v="new">新案件</button>
+        <button type="button" class="btn-primary" data-v="same">同一個案件</button>
+      </div>
+    </form>`;
+  return new Promise((resolve) => {
+    const done = (v) => { dlg.removeEventListener('cancel', onCancel); dlg.close(); resolve(v || null); };
+    const onCancel = (e) => { e.preventDefault(); done(null); };
+    dlg.addEventListener('cancel', onCancel);
+    dlg.querySelectorAll('[data-v]').forEach((b) => { b.onclick = () => done(b.dataset.v); });
+    dlg.showModal();
+    $('[data-v=same]', dlg).focus();
+  });
 }

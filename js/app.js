@@ -1,7 +1,8 @@
-import { supabase, isMock } from './supabase.js';
+import './frame-guard.js'; // 資安 20261111（C）：被別的網站用 iframe 嵌入時不載入（必須排第一個）
+import { supabase, isMock, isLocalDevHost } from './supabase.js';
 import * as data from './data.js';
 import { state, loadAll, refreshTasks, subscribe, reset } from './store.js';
-import { $, esc, toast, setNavBadge } from './ui.js';
+import { $, esc, toast, setNavBadge, isPreviewPath } from './ui.js';
 export { setNavBadge }; // 20261106：其他模組也可以從 ui.js 直接 import
 import { mountOverview } from './views/overview.js';
 import { mountTasks } from './views/tasks.js';
@@ -22,6 +23,7 @@ import { mountContacts } from './views/contacts.js';
 import { mountInbox } from './views/inbox.js';
 import { mountTags } from './views/tags.js';
 import { mountReflect } from './views/reflect.js';
+import { mountFeedback, openFeedbackDialog } from './views/feedback.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -52,6 +54,8 @@ const ICONS = {
   // 標籤與分類：一張吊牌
   tags: '<path d="M4 4h7l9 9-7 7-9-9z"/><path d="M8 8h.01"/>',
   backup: '<path d="M8 4v13M4.5 13.5 8 17l3.5-3.5M16 20V7M12.5 10.5 16 7l3.5 3.5"/>',
+  // 回饋：一個對話框泡泡＋三個點
+  feedback: '<path d="M4 5h16v11H10l-4 4v-4H4z"/><path d="M8.5 10.5h.01M12 10.5h.01M15.5 10.5h.01"/>',
   guide: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z"/><path d="M9.7 9.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.6M12 16.6h.01"/>',
 };
 // 沒有專屬圖示的頁面用一個小方格（其他模組新增路由時不會壞掉）
@@ -80,6 +84,7 @@ const ROUTES = [
   { id: 'backup', label: '數據與備份', mount: mountBackup, group: '設定' },
   { id: 'guide', label: '使用說明', mount: mountGuide, group: '設定' },
   { id: 'contacts', label: '跟進對象', mount: mountContacts, group: '其他' },
+  { id: 'feedback', label: '回饋', mount: mountFeedback, group: '其他', badge: true }, // 20261111（D）回饋匣
 ];
 
 let unsubscribe = null;
@@ -149,6 +154,12 @@ function updateInboxBadge() {
 }
 window.addEventListener('lifeos:inbox-changed', updateInboxBadge);
 
+/** 回饋徽章（20261111 D）：預覽中（等使用者確認）的筆數；表還沒建立時不顯示 */
+function updateFeedbackBadge() {
+  data.feedbackPreviewCount().then((n) => setNavBadge('feedback', n, `${n} 則回饋的預覽版等你確認`)).catch(() => {});
+}
+window.addEventListener('lifeos:feedback-changed', updateFeedbackBadge);
+
 /** 側欄的計時中提示：任何頁面都看得到、可直接暫停 */
 function updateRunningBar() {
   const bar = $('#running-bar');
@@ -187,6 +198,7 @@ function route() {
   const id = location.hash.replace('#/', '').split('/')[0] || 'overview';
   const r = ROUTES.find((x) => x.id === id) || ROUTES[0];
   updateInboxBadge(); // 換頁時順便更新（例如在收件匣以外的地方點開過）
+  updateFeedbackBadge();
   document.querySelectorAll('#nav a').forEach((a) => {
     a.toggleAttribute('aria-current', a.dataset.route === r.id);
   });
@@ -222,7 +234,7 @@ function showAuth(message = '') {
       <div class="card auth-card">
         <h1>Life OS</h1>
         <p>尚未設定 Supabase。請把 <code>src/js/config.example.js</code> 複製成 <code>config.js</code> 並填入專案網址與 anon key。</p>
-        <p class="sub">只想先看介面：網址加上 <code>?mock=1</code> 使用本機模擬資料（不會同步）。</p>
+        ${isLocalDevHost(location.hostname) ? '<p class="sub">只想先看介面：網址加上 <code>?mock=1</code> 使用本機模擬資料（不會同步；只在本機開發時有效）。</p>' : ''}
       </div>`;
     return;
   }
@@ -271,9 +283,32 @@ function authErrorText(m = '') {
 }
 
 let loadedFor = null;
+let leaving = false;
+/**
+ * 資安 20261111（C）：登出或登入狀態消失時整頁重新載入到乾淨的網址（去掉 #頁面，深層連結不留著），
+ * 畫面、對話框、記憶體裡的資料一起清掉；只隱藏畫面的話，上一個人的內容還留在 DOM 裡。
+ * 保留 ?mock=1 等查詢參數（模擬模式要靠它）。
+ */
+function reloadClean() {
+  if (leaving) return;
+  leaving = true;
+  unsubscribe?.();
+  reset();
+  document.querySelectorAll('dialog[open]').forEach((d) => d.close());
+  document.querySelectorAll('dialog').forEach((d) => { if (d.id !== 'confirm-dialog') d.innerHTML = ''; });
+  $('#main').innerHTML = '';
+  $('#user-email').textContent = '';
+  $('#app').hidden = true;
+  location.replace(`${location.pathname}${location.search}`);
+}
+
 async function showApp(session) {
-  if (loadedFor === session.user.id) return;
-  loadedFor = session.user.id;
+  if (loadedFor === session.user.id || leaving) return;
+  // 換成另一個帳號（例如在別的分頁登入）：先整頁清掉，不讓上一個人的畫面留著
+  if (loadedFor) { reloadClean(); return; }
+  const uid = session.user.id;
+  loadedFor = uid;
+  const stale = () => loadedFor !== uid || leaving; // 等待中已登出或換人：遲到的回應丟掉
   $('#auth').hidden = true;
   $('#app').hidden = false;
   $('#user-email').textContent = session.user.email;
@@ -281,13 +316,16 @@ async function showApp(session) {
   $('#main').innerHTML = '<p class="sub">載入中…</p>';
   try {
     await loadAll();
+    if (stale()) return;
     if (isMock) {
       const { seedDemoTasks } = await import('./dev/mock-supabase.js');
       await seedDemoTasks(supabase, state.areas);
       await refreshTasks();
     }
+    if (stale()) return;
     route();
   } catch (e) {
+    if (stale()) return;
     $('#main').innerHTML = `<section class="card"><p class="warn">讀取資料失敗：${esc(e.message)}</p>
       <p class="sub">請確認已在 Supabase 執行 supabase/schema.sql。</p></section>`;
   }
@@ -295,8 +333,8 @@ async function showApp(session) {
 
 function handleSession(session) {
   if (session) showApp(session);
+  else if (loadedFor) reloadClean(); // 登出、或登入狀態失效（token 過期、別的分頁登出）
   else {
-    loadedFor = null;
     unsubscribe?.();
     reset();
     showAuth();
@@ -328,8 +366,23 @@ document.addEventListener('keydown', (e) => {
   setSidebarCollapsed(!$('#app').classList.contains('sb-collapsed'));
 });
 initAccount();
+$('#feedback-btn').onclick = () => openFeedbackDialog(); // 20261111（D）：任何頁面都能寫回饋，自動帶上目前頁面
+
+// 預覽版（site/preview/，docs/15）：整頁標上「預覽版」，避免和正式版搞混；登入畫面也看得到
+if (isPreviewPath(location.pathname)) {
+  document.documentElement.classList.add('is-preview');
+  document.title = `【預覽版】${document.title}`;
+  const rib = document.createElement('div');
+  rib.className = 'preview-ribbon';
+  rib.setAttribute('role', 'note');
+  rib.textContent = '預覽版・資料和正式版是同一份';
+  document.body.append(rib);
+}
 $('#signout-btn').onclick = async () => {
-  try { await data.signOut(); } catch (e) { toast(e.message, true); }
+  try {
+    await data.signOut();
+    reloadClean(); // 通常 SIGNED_OUT 事件已經觸發過；這裡再保險一次（leaving 旗標防重複）
+  } catch (e) { toast(e.message, true); }
 };
 
 // 從 Google 授權頁轉回來時顯示結果，並把網址上的參數清掉

@@ -2,7 +2,7 @@
 // 資料只呼叫 data.js「手帳（Phase J）」的書影單函式；封面搜尋在 covers.js。
 import * as data from '../data.js';
 import { refreshNotes } from '../store.js';
-import { $, esc, toast, confirmDialog, linkLabel } from '../ui.js';
+import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js';
 import { today, formatShort } from '../dates.js';
 import { searchCovers, canSearchCover, COVER_SEARCH } from '../covers.js';
 
@@ -61,7 +61,7 @@ function ticketHTML(m) {
           : m.status === 'doing' && m.started_on ? `<span class="sub md-since">${esc(formatShort(m.started_on))} 開始</span>` : ''}
         ${m.status === 'dropped' ? '<span class="sub">已放棄</span>' : ''}
         <span class="md-actions">
-          ${m.link_url ? `<a class="btn-ghost" href="${esc(m.link_url)}" target="_blank" rel="noopener noreferrer" title="${esc(m.link_url)}">${esc(linkLabel(m.link_url))} ↗</a>` : ''}
+          ${safeHref(m.link_url) ? `<a class="btn-ghost" href="${esc(safeHref(m.link_url))}" target="_blank" rel="noopener noreferrer" title="${esc(m.link_url)}">${esc(linkLabel(m.link_url))} ↗</a>` : ''}
           ${next ? `<button type="button" class="btn-ghost md-next" data-next="${next.to}">→ ${esc(nextLabel)}</button>` : ''}
           ${m.status === 'done' && m.review ? (m.note_id
             ? '<button type="button" class="btn-ghost md-saved" data-note title="再按一次會更新同一則">✓ 已存到知識庫</button>'

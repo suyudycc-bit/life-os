@@ -106,6 +106,7 @@ const TASK_FIELDS = ['title', 'notes', 'area_id', 'project_id', 'goal_id', 'stat
   'board_parked', 'work_project_tag_id']; // 20261106：看板停在累積未完成、看板專案標籤
 
 function pickTask(obj) {
+  if (obj.links != null) assertWebLinks(obj.links); // 資安 20261111：任務連結只收 http(s)
   return Object.fromEntries(Object.entries(obj).filter(([k]) => TASK_FIELDS.includes(k)));
 }
 
@@ -662,23 +663,29 @@ export function boardMovePatch(t, toCol, day) {
   }
 }
 
-// ===== 案件總覽（Phase W4）：一個案件＝一個工作任務 =====
+// ===== 案件總覽（Phase W4）：一個案件＝同一個案件編號的所有工作任務（20261111 起可多張卡；沒有編號的一張卡一個案件）=====
 export const CASE_STATUS = { open: '未完成', doing: '進行中', todo: '待辦', done: '已完成', dropped: '放棄', all: '全部' };
 const normTitle = (s) => String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 /**
- * 案件清單（只有列入工作看板的領域）：最後活動＝最新進度、完成、建立三者最晚的那天
- * @returns {{task, lastDay, firstDay, memoCount, search}[]}
+ * 案件清單（只有列入工作看板的領域）：同案號的卡併成一列（caseGroups）。
+ * task＝代表卡（還有未完成的就是最新那張未完成的，否則最新那張），title＝最新一張卡的標題，status＝有未完成的卡就是未完成；
+ * 第一天＝最早建立，最後活動＝所有卡的最新進度、完成、建立最晚的那天；進度數與搜尋涵蓋所有卡
+ * @returns {{key, task, tasks, title, status, lastDay, firstDay, memoCount, search}[]}
  */
 export function caseRows(tasks, areasById, memosByTask, projects, workTags) {
-  return tasks.filter((t) => isWorkTask(t, areasById)).map((t) => {
-    const memos = memosByTask[t.id] || [];
-    const days = [localDate(t.created_at), t.completed_at && localDate(t.completed_at), memos[0] && localDate(memos[0].created_at)].filter(Boolean);
-    const project = projects.find((p) => p.id === t.project_id)?.name || '';
-    const workType = workTags.find((w) => w.id === t.work_type_id)?.label || '';
+  return caseGroups(tasks.filter((t) => isWorkTask(t, areasById))).map((cards) => {
+    const task = caseLead(cards);
+    const memos = cards.flatMap((t) => memosByTask[t.id] || []);
+    const days = cards.flatMap((t) => [localDate(t.created_at), t.completed_at && localDate(t.completed_at)])
+      .concat(memos.map((m) => localDate(m.created_at))).filter(Boolean).sort();
+    const project = projects.find((p) => p.id === task.project_id)?.name || '';
+    const workType = workTags.find((w) => w.id === task.work_type_id)?.label || '';
     return {
-      task: t, firstDay: localDate(t.created_at), lastDay: days.sort().at(-1), memoCount: memos.length, project, workType,
-      search: [t.case_no, t.title, t.notes, project, workType, ...(t.links || []), ...memos.map((m) => m.body)].join(' ').toLowerCase(),
+      key: caseKeyOf(task), task, tasks: cards, title: cards.at(-1).title, status: caseStatus(cards),
+      firstDay: days[0], lastDay: days.at(-1), memoCount: memos.length, project, workType,
+      search: [task.case_no, ...cards.flatMap((t) => [t.title, t.notes, ...(t.links || [])]), project, workType, ...memos.map((m) => m.body)]
+        .join(' ').toLowerCase(),
     };
   });
 }
@@ -686,7 +693,7 @@ export function caseRows(tasks, areasById, memosByTask, projects, workTags) {
 export function filterCases(rows, { q = '', status = 'open', projectId = '', workTypeId = '', sort = 'recent' } = {}) {
   const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const ok = (r) => {
-    const s = r.task.status;
+    const s = r.status || r.task.status; // 20261111：案件的狀態（有未完成的卡就是未完成）
     if (status === 'open' && !(s === 'todo' || s === 'doing')) return false;
     if (!['open', 'all'].includes(status) && s !== status) return false;
     if (projectId && r.task.project_id !== projectId) return false;
@@ -701,17 +708,19 @@ export function filterCases(rows, { q = '', status = 'open', projectId = '', wor
   return rows.filter(ok).sort(by);
 }
 
-/** 合併建議：同一個標題（忽略大小寫與空白）卻有多個案件；最早的案件編號當保留的那個 */
+/** 合併建議：同一個標題（忽略大小寫與空白）卻有多個案件編號（同案號的卡已併成一列）；最早的案件編號當保留的那個 */
 export function mergeSuggestions(rows) {
   const groups = new Map();
   for (const r of rows) {
-    const k = normTitle(r.task.title);
+    const k = normTitle(r.title ?? r.task.title);
     if (!k) continue;
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(r);
   }
   return [...groups.values()].filter((g) => g.length > 1)
-    .map((g) => g.sort((a, b) => String(a.task.case_no || '~').localeCompare(String(b.task.case_no || '~')) || a.firstDay.localeCompare(b.firstDay)));
+    // 沒有編號的排後面（原本用 '~' 墊底，但 localeCompare 會把符號排在英數字前面，20261111 修正）
+    .map((g) => g.sort((a, b) => (a.task.case_no ? 0 : 1) - (b.task.case_no ? 0 : 1)
+      || String(a.task.case_no || '').localeCompare(String(b.task.case_no || '')) || a.firstDay.localeCompare(b.firstDay)));
 }
 
 /** 某個任務的全部計時（案件歷程用；state.entries 只有近期） */
@@ -719,25 +728,7 @@ export async function listEntriesForTask(taskId) {
   return must(await supabase.from('time_entries').select('*').eq('task_id', taskId).order('started_at', { ascending: false }));
 }
 
-/**
- * 合併案件：把 dropIds 的進度紀錄與計時搬到 keep，連結合併，最後刪掉重複的任務。
- * 實際用時由資料庫觸發器依搬過來的計時重算。回傳搬動的筆數。
- */
-export async function mergeCases(keep, drops) {
-  if (!keep || !drops.length || drops.some((d) => d.id === keep.id)) throw new Error('請選擇要保留的案件和要合併的案件');
-  let memos = 0;
-  let entries = 0;
-  for (const d of drops) {
-    memos += must(await supabase.from('task_memos').update({ task_id: keep.id }).eq('task_id', d.id).select('id')).length;
-    entries += must(await supabase.from('time_entries').update({ task_id: keep.id }).eq('task_id', d.id).select('id')).length;
-  }
-  const links = [...new Set([...(keep.links || []), ...drops.flatMap((d) => d.links || [])])];
-  const patch = { links };
-  if (drops.some((d) => d.status === 'doing') && keep.status === 'todo') patch.status = 'doing';
-  await updateTask(keep.id, patch);
-  for (const d of drops) await deleteTask(d.id);
-  return { memos, entries, deleted: drops.length };
-}
+// 合併案件：20261111 起改成 mergeCaseNos（只改案號，不搬進度、不刪卡），見檔案末段
 
 // ===== 常用詞組（Phase W4）=====
 export async function listPhrases() {
@@ -761,14 +752,9 @@ export function nextCaseNo(tasks) {
   return `WK-${String(max + 1).padStart(6, '0')}`;
 }
 
-/** 在看板新增工作：自動給案件編號；編號被搶先用掉時（另一台裝置同時新增）重試一次 */
+/** 在看板新增工作：沒指定案號（沿用既有案件，20261111）就給下一個案件編號 */
 export async function createWorkTask(task, tasks) {
-  try {
-    return await createTask({ ...task, case_no: nextCaseNo(tasks) }, tasks);
-  } catch (e) {
-    if (!/duplicate|23505/.test(e.message)) throw e;
-    return createTask({ ...task, case_no: nextCaseNo(await listTasks()) }, tasks);
-  }
+  return createTask({ ...task, case_no: task.case_no || nextCaseNo(tasks) }, tasks);
 }
 
 export async function listProjects() {
@@ -895,14 +881,15 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'daily_reviews', 'notes', 'habits', 'habit_logs', 'routine_phrases',
   'period_reviews', 'future_events', 'media_items', 'bucket_items',
   'inbox_items', 'contact_stages', 'contacts', 'contact_logs',
-  'reflections']; // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
+  'reflections', // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
+  'feedback']; // 20261111 回饋匣（不參照其他表）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
   work_tags: '工作種類', routine_phrases: '常用詞組',
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
-  reflections: '內在整理',
+  reflections: '內在整理', feedback: '回饋',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -965,6 +952,7 @@ const NATURAL_KEY = {
   contacts: (r) => `${r.name}|${r.created_at}`,
   contact_logs: (r) => `${r.contact_id}|${r.log_date}|${r.created_at}`,
   reflections: (r) => `${r.kind}|${r.entry_date}|${r.created_at}`,
+  feedback: (r) => `${r.created_at}|${r.body}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -984,8 +972,10 @@ export async function planImport(backup) {
   const has = Object.fromEntries(BACKUP_TABLES.map((t) => [t, new Set(current[t].map((r) => r.id))]));
   const byKey = Object.fromEntries(BACKUP_TABLES.map((t) => [t, new Map(current[t].map((r) => [NATURAL_KEY[t](r), r.id]))]));
   const idMap = Object.fromEntries(BACKUP_TABLES.map((t) => [t, {}])); // 備份 id → 匯入後的 id
-  const byCase = new Map(current.tasks.filter((r) => r.case_no).map((r) => [r.case_no, r.id]));
-  const plan = {};
+  // 20261111：案件編號可重複（一個案件多張卡），不能再用案號當同一筆；改用「案號＋建立時間」（改過標題也認得）
+  const caseKey = (r) => `${r.case_no}|${r.created_at}`;
+  const byCase = new Map(current.tasks.filter((r) => r.case_no).map((r) => [caseKey(r), r.id]));
+  const plan = { _droppedLinks: 0 }; // 資安 20261111：備份檔裡不是 http(s) 的連結丟掉的個數
   for (const t of BACKUP_TABLES) {
     const rows = Array.isArray(backup.tables[t]) ? backup.tables[t] : [];
     const add = [];
@@ -1007,15 +997,17 @@ export async function planImport(backup) {
           .map(([k, v]) => [idMap.tasks[k], v]).filter(([k]) => k));
       }
       // 關聯換成新 id 之後再比內容，才能比對到「已匯入過、id 不同」的那筆
-      // 任務有案件編號時，同編號就是同一件工作（改過標題也算），避免撞到唯一索引
-      const same = ok && ((t === 'tasks' && r.case_no && byCase.get(r.case_no)) || byKey[t].get(NATURAL_KEY[t](r)));
+      // 任務有案件編號時，同編號、同建立時間就是同一張卡（改過標題也算）；其餘照內容比對（標題＋建立時間）
+      const same = ok && ((t === 'tasks' && r.case_no && byCase.get(caseKey(r))) || byKey[t].get(NATURAL_KEY[t](r)));
       if (same) { idMap[t][r.id] = same; skip++; continue; }
       if (!ok || (t === 'time_entries' && !r.ended_at)) { skip++; continue; }
+      plan._droppedLinks += cleanImportLinks(t, r);
+      if (t === 'inbox_items' && !r.url && !r.title?.trim() && !r.body?.trim()) { skip++; continue; } // 只有壞連結的待看項目
       const newId = crypto.randomUUID();
       idMap[t][r.id] = newId;
       add.push({ ...r, id: newId });
       byKey[t].set(NATURAL_KEY[t](r), newId);
-      if (t === 'tasks' && r.case_no) byCase.set(r.case_no, newId);
+      if (t === 'tasks' && r.case_no) byCase.set(caseKey(r), newId);
     }
     plan[t] = { add, skip };
   }
@@ -1724,7 +1716,7 @@ export async function restoreTrash(trashId) {
   return { ...t, notes: fixed.notes };
 }
 
-// 還原前的檢查：可留白的關聯若已不存在就清空（並說明）；必填的領域不存在就停下；案件編號已被用掉就換新的
+// 還原前的檢查：可留白的關聯若已不存在就清空（並說明）；必填的領域不存在就停下（案件編號照舊保留，20261111）
 const RESTORE_OPTIONAL_REFS = { project_id: ['projects', '專案'], goal_id: ['goals', '目標'], work_type_id: ['work_tags', '工作種類'],
   work_project_tag_id: ['work_tags', '專案標籤'], note_id: ['notes', '靈感'], stage_id: ['contact_stages', '跟進階段'], task_id: ['tasks', '任務'],
   habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'] };
@@ -1747,14 +1739,7 @@ async function restoreFixRefs(table, original) {
     row[col] = null;
     notes.push(`原本的${label}已不存在，已取消關聯`);
   }
-  if (table === 'tasks' && row.case_no) {
-    const dup = must(await supabase.from('tasks').select('id').eq('case_no', row.case_no).maybeSingle());
-    if (dup) {
-      const old = row.case_no;
-      row.case_no = nextCaseNo(await listTasks());
-      notes.push(`案件編號 ${old} 已被新的工作使用，改成 ${row.case_no}`);
-    }
-  }
+  // 20261111：案件編號可重複（一個案件多張卡），還原時保留原本的案號，接回同一個案件
   return { row, notes };
 }
 /** 永久刪除（不能復原） */
@@ -2701,4 +2686,278 @@ export async function reflectionToTask(ref, { title, area_id, due_date }, existi
   const rows = must(await supabase.from('reflections').update({ task_id: task.id, updated_at: new Date().toISOString() }).eq('id', ref.id).select());
   if (rows.length !== 1) throw new Error(`任務已建立，但便籤沒有連上（預期 1 張，實際 ${rows.length} 張）`);
   return { task, reflection: rows[0] };
+}
+
+// ===== 回饋匣 20261111（D）=====
+// 使用者邊用邊寫建議（views/feedback.js）；沒有程式會自動讀它，使用者說「處理回饋」時由 Claude 讀取（流程見 docs/15-feedback-workflow.md）。
+// migration 20261111_feedback_box.sql。UI 只呼叫這裡。
+export const FEEDBACK_KINDS = { bug: '問題', idea: '想法', question: '疑問' };
+export const FEEDBACK_STATUS = { new: '新的', doing: '處理中', preview: '預覽中', done: '已完成', wontfix: '不處理' };
+export const FEEDBACK_MAX = 4000;
+TRASH_SPEC.feedback = { label: (r) => `回饋・${(r.body || '').split('\n')[0].slice(0, 40)}` };
+TRASH_LABELS.feedback = '回饋';
+
+/** 資料庫還沒跑 migration 時，把英文錯誤換成看得懂的說明 */
+function feedbackMust(res) {
+  const m = res.error?.message || '';
+  if (res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01' || /feedback.*(does not exist|schema cache)/i.test(m))) {
+    throw new Error('回饋匣還沒啟用：需要先在 Supabase 執行 migration 20261111_feedback_box.sql');
+  }
+  return must(res);
+}
+
+/** 全部回饋：新到舊 */
+export async function listFeedback() {
+  return feedbackMust(await supabase.from('feedback').select('*').order('created_at', { ascending: false }));
+}
+
+/** 新增或修改回饋（只能改還是「新的」那幾筆；整理空白、檢查長度與類型） */
+export async function saveFeedback(fb) {
+  const body = String(fb.body ?? '').replace(/\r\n/g, '\n').trim();
+  if (!body) throw new Error('請寫一點內容');
+  if (body.length > FEEDBACK_MAX) throw new Error(`最多 ${FEEDBACK_MAX} 字`);
+  const kind = fb.kind || (fb.id ? null : 'idea'); // 修改時沒給類型就不動
+  if (kind && !FEEDBACK_KINDS[kind]) throw new Error('類型不正確');
+  const page = fb.page == null ? null : String(fb.page).slice(0, 200) || null;
+  if (fb.id) {
+    const patch = { body, updated_at: new Date().toISOString() };
+    if (kind) patch.kind = kind;
+    const rows = feedbackMust(await supabase.from('feedback').update(patch)
+      .eq('id', fb.id).eq('status', 'new').select());
+    if (rows.length !== 1) throw new Error('這則回饋已經在處理，不能再修改');
+    return rows[0];
+  }
+  return feedbackMust(await supabase.from('feedback').insert({ body, kind, page }).select().single());
+}
+
+/** 改狀態（可同時寫回覆）；處理回饋時用，畫面上不提供 */
+export async function setFeedbackStatus(id, status, reply) {
+  if (!FEEDBACK_STATUS[status]) throw new Error('狀態不正確');
+  const patch = { status, updated_at: new Date().toISOString() };
+  if (reply !== undefined) patch.reply = reply == null ? null : String(reply).trim() || null;
+  const rows = feedbackMust(await supabase.from('feedback').update(patch).eq('id', id).select());
+  if (rows.length !== 1) throw new Error(`預期更新 1 筆，實際 ${rows.length} 筆`);
+  return rows[0];
+}
+
+/** 刪除（走垃圾桶，30 天內可還原）；只能刪還是「新的」 */
+export async function deleteFeedback(id) {
+  const row = feedbackMust(await supabase.from('feedback').select('id, status').eq('id', id).maybeSingle());
+  if (!row) throw new Error('找不到這則回饋（可能已被刪除）');
+  if (row.status !== 'new') throw new Error('這則回饋已經在處理，不能刪除');
+  return trashDelete('feedback', id);
+}
+
+/** 各狀態筆數（分頁籤用） */
+export function feedbackCounts(items) {
+  const out = Object.fromEntries(Object.keys(FEEDBACK_STATUS).map((k) => [k, 0]));
+  for (const it of items) if (out[it.status] != null) out[it.status]++;
+  return out;
+}
+
+/** 側欄徽章：等使用者確認的（預覽中）筆數 */
+export async function feedbackPreviewCount() {
+  const rows = feedbackMust(await supabase.from('feedback').select('id').eq('status', 'preview'));
+  return rows.length;
+}
+
+// ===== 知識庫自動儲存與總覽過期 20261111（B）=====
+/** 靈感只寫了正文、標題留白時（自動儲存），用正文第一行當標題（最多 40 字） */
+export function noteFallbackTitle(body) {
+  const line = String(body || '').split('\n').map((x) => x.trim()).find(Boolean) || '';
+  return line ? (line.length > 40 ? `${line.slice(0, 40)}…` : line) : '（未命名靈感）';
+}
+
+/** 兩個 YYYY-MM-DD 相差幾天（b − a），純日期運算 */
+function daysBetween(a, b) {
+  const t = (s) => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  return Math.round((t(b) - t(a)) / 86400000);
+}
+
+/**
+ * 總覽「昨天沒做完」：已過期、還沒完成的生活任務（呼叫端傳 state.life.tasks，工作只在工作看板）。
+ * 候選與排序直接用月度遷移的 migrationCandidates（同一套規則：未完成、代表日期早於今天），
+ * 動作也用 migrateTasks，這裡只多算「過期幾天」與標題該用哪一句。
+ * @returns {{ items: {task, day, daysLate}[], allYesterday: boolean }}
+ */
+export function overdueOverview(tasks, day = today()) {
+  const items = migrationCandidates(tasks, day).map((c) => ({ task: c.task, day: c.day, daysLate: daysBetween(c.day, day) }));
+  return { items, allYesterday: items.length > 0 && items.every((x) => x.day === addDays(day, -1)) };
+}
+
+// ===== 工作看板接續與案件沿用 20261111（A）=====
+// 一個案件＝同一個 case_no 的所有工作任務（migration 20261111_case_shared 拿掉了唯一限制）。
+// 「接續」＝今天這張標完成（留在今天的回報），另建一張同案號的新卡放到明天預計／累積未完成；進度紀錄與計時留在原卡。
+
+/** 案件的分組鍵：有案號用案號，沒有的一張卡自成一案 */
+export const caseKeyOf = (t) => (t.case_no ? `C:${t.case_no}` : `T:${t.id}`);
+
+/** 把任務依案件分組（每組依建立時間舊到新） */
+export function caseGroups(tasks) {
+  const map = new Map();
+  for (const t of tasks) {
+    const k = caseKeyOf(t);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(t);
+  }
+  return [...map.values()].map((g) => g.sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))));
+}
+
+/** 同一個案件的所有卡（舊到新）；沒有案號的只有自己 */
+export function caseTasks(tasks, task) {
+  if (!task?.case_no) return task ? [task] : [];
+  return tasks.filter((t) => t.case_no === task.case_no).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+}
+
+/** 代表卡：最新一張未完成的；都結束了就是最新一張 */
+export function caseLead(cards) {
+  return cards.filter(isOpen).at(-1) || cards.at(-1);
+}
+
+/** 案件狀態：有進行中的卡＝進行中；有待辦＝待辦；否則看最新一張 */
+export function caseStatus(cards) {
+  if (cards.some((t) => t.status === 'doing')) return 'doing';
+  if (cards.some((t) => t.status === 'todo')) return 'todo';
+  return cards.at(-1)?.status;
+}
+
+/** 連結比對用：去頭尾空白、網域小寫、去掉結尾的斜線 */
+export function normLink(u) {
+  const s = String(u || '').trim();
+  if (!s) return '';
+  try {
+    const url = new URL(s);
+    const path = url.pathname.replace(/\/+$/, '');
+    return `${url.protocol}//${url.host.toLowerCase()}${path}${url.search}${url.hash}`.replace(/\/+$/, '');
+  } catch {
+    return s.replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+/**
+ * 新增工作前找同一個案件（純函式）：任一連結和既有案件的連結相同 → {reason:'link'}（自動沿用）；
+ * 否則標題相同（忽略空白與大小寫）→ {reason:'title'}（要問使用者）。都找不到回傳 null。
+ * 只看有案件編號的任務；有好幾個符合時用最新建立的那張的案號。傳 areasById 時只看列入工作看板的任務。
+ */
+export function findSameCase(tasks, { title = '', links = [] } = {}, areasById = null) {
+  const pool = tasks.filter((t) => t.case_no && (!areasById || isWorkTask(t, areasById)))
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  const want = new Set((links || []).map(normLink).filter(Boolean));
+  if (want.size) {
+    const hit = pool.find((t) => (t.links || []).some((u) => want.has(normLink(u))));
+    if (hit) return { case_no: hit.case_no, reason: 'link', task: hit };
+  }
+  const k = normTitle(title);
+  if (k) {
+    const hit = pool.find((t) => normTitle(t.title) === k);
+    if (hit) return { case_no: hit.case_no, reason: 'title', task: hit };
+  }
+  return null;
+}
+
+export const CONTINUE_TARGETS = { tomorrow: '明天預計', backlog: '累積未完成' };
+
+/**
+ * 接續任務（今日歸今日）：原卡標完成（completed_at 由觸發器寫），另建一張同案號的新卡。
+ * target：'tomorrow'＝到期日改下一個工作日（有排程時刻的保留時刻，同拖到明天預計）；'backlog'＝不設日期、board_parked。
+ * 新卡帶標題、連結、說明、領域、專案、目標、工作種類、專案標籤、優先級、星標、預計時間；進度紀錄與計時留在原卡。
+ * 原卡沒有案號（舊資料）就一併給一個，兩張卡才接得起來。正在計時的先停止。
+ * @returns {{ original, created, case_no }}
+ */
+export async function continueTask(task, target, { tasks = [], running = null, day = today() } = {}) {
+  if (!task) throw new Error('找不到要接續的工作');
+  if (!isOpen(task)) throw new Error('只有未完成的工作可以接續');
+  if (!CONTINUE_TARGETS[target]) throw new Error('接續的位置不正確');
+  const case_no = task.case_no || nextCaseNo(tasks);
+  const next = nextWorkingDay(day);
+  const place = target === 'tomorrow'
+    ? { due_date: next, scheduled_start: shiftScheduled(task.scheduled_start, next), board_parked: false }
+    : { due_date: null, scheduled_start: null, board_parked: true };
+  const orders = tasks.map((t) => t.sort_order).filter((v) => v != null);
+  const row = pickTask({
+    title: task.title, notes: task.notes ?? null, links: task.links || [], area_id: task.area_id, project_id: task.project_id ?? null,
+    goal_id: task.goal_id ?? null, work_type_id: task.work_type_id ?? null, work_project_tag_id: task.work_project_tag_id ?? null,
+    priority: task.priority ?? 2, starred: Boolean(task.starred), estimate_min: task.estimate_min ?? null,
+    status: 'todo', case_no, sort_order: orders.length ? Math.min(...orders) - 1 : null, ...place,
+  });
+  if (running?.task_id === task.id) await stopTimer(running);
+  const created = must(await supabase.from('tasks').insert(row).select());
+  if (created.length !== 1) throw new Error(`接續失敗：預期新增 1 張卡，實際 ${created.length} 張`);
+  const patch = { status: 'done', ...(task.case_no ? {} : { case_no }) };
+  let done = null;
+  try { done = must(await supabase.from('tasks').update(patch).eq('id', task.id).select()); } catch { done = null; }
+  if (done?.length !== 1) {
+    // 原卡沒標成完成：把剛建的新卡收回，避免同一件工作出現兩張未完成的卡
+    await supabase.from('tasks').delete().eq('id', created[0].id);
+    throw new Error(`接續失敗：原本的卡沒有標成完成（預期 1 張，實際 ${done?.length ?? 0} 張），已取消新卡`);
+  }
+  return { original: done[0], created: created[0], case_no };
+}
+
+/** 案件歷程用：多張卡的全部計時（state.entries 只有近期） */
+export async function listEntriesForTasks(ids) {
+  if (!ids.length) return [];
+  return must(await supabase.from('time_entries').select('*').in('task_id', ids).order('started_at', { ascending: false }));
+}
+
+/**
+ * 合併案件（20261111 起）：把 drops 各案件所有卡的案號改成 keep 的案號，變成同一個案件的多張卡。
+ * 不搬進度、不刪卡（案號可重複了）。keep 沒有案號時給一個新的。更新後核對筆數。
+ * keep、drops 是 caseRows 的列。
+ */
+export async function mergeCaseNos(keep, drops, tasks = []) {
+  if (!keep || !drops.length || drops.some((d) => d.key === keep.key)) throw new Error('請選擇要保留的案件和要合併的案件');
+  const target = keep.task.case_no || nextCaseNo(tasks);
+  const ids = [...(keep.task.case_no ? [] : keep.tasks), ...drops.flatMap((d) => d.tasks)].map((t) => t.id);
+  const rows = must(await supabase.from('tasks').update({ case_no: target }).in('id', ids).select('id'));
+  if (rows.length !== ids.length) throw new Error(`合併時預期更新 ${ids.length} 張卡，實際 ${rows.length} 張，請重新整理後檢查`);
+  return { case_no: target, updated: rows.length };
+}
+
+// ===== 資安 20261111（C）=====
+// 連結只允許 http／https（javascript:、data: 等點下去會執行或冒充）。畫面產生連結用 ui.safeHref，存檔與匯入用這裡。
+export function isWebUrl(u) {
+  try {
+    const p = new URL(String(u ?? '').trim()).protocol;
+    return p === 'http:' || p === 'https:';
+  } catch { return false; }
+}
+
+/** 任務連結存檔前檢查：有一個不是 http(s) 就整筆不存，並說明是哪一個 */
+export function assertWebLinks(links) {
+  if (!Array.isArray(links)) throw new Error('連結格式不正確');
+  const bad = links.find((u) => !isWebUrl(u));
+  if (bad !== undefined) throw new Error(`連結只接受 http:// 或 https:// 開頭的網址：${String(bad).slice(0, 60)}`);
+}
+
+// 備份匯入時要過濾的連結欄位：array＝陣列（任務的 links），http＝http(s)，https＝只收 https（封面）
+const IMPORT_LINK_FIELDS = {
+  tasks: { links: 'array' },
+  media_items: { link_url: 'http', cover_url: 'https' },
+  inbox_items: { url: 'http' },
+};
+
+/** 把一列備份資料裡不安全的連結拿掉（陣列移除該項、單一欄位設成空），回傳拿掉的個數 */
+export function cleanImportLinks(table, row) {
+  let dropped = 0;
+  for (const [col, kind] of Object.entries(IMPORT_LINK_FIELDS[table] || {})) {
+    const v = row[col];
+    if (v == null || v === '') continue;
+    if (kind === 'array') {
+      const list = Array.isArray(v) ? v : [];
+      const keep = list.filter(isWebUrl);
+      dropped += (Array.isArray(v) ? list.length : 1) - keep.length;
+      row[col] = keep;
+    } else if (!isWebUrl(v) || (kind === 'https' && !/^https:/i.test(String(v).trim()))) {
+      row[col] = null;
+      dropped++;
+    }
+  }
+  return dropped;
+}
+
+/** Google 日曆私密網址的遮罩：前 30 字＋…＋後 10 字（前面是固定的 calendar.google.com 路徑、後面是 /basic.ics，不含金鑰那段） */
+export function maskIcsUrl(url) {
+  const v = String(url || '');
+  return v.length <= 44 ? `${v.slice(0, 8)}…` : `${v.slice(0, 30)}…${v.slice(-10)}`;
 }

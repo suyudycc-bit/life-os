@@ -27,6 +27,7 @@ export function mountBackup(root) {
       <section class="card">
         <h2>匯出</h2>
         <p class="sub">下載一個 JSON 檔，包含領域、任務、專案、目標、計時、復盤、靈感、習慣等全部資料。</p>
+        <p class="bk-private" role="note">🔒 備份檔沒有加密，含聯絡人、日記與復盤、內在整理、工作備註等私人內容：請存在只有自己能開的地方，不要傳給別人或上傳到公開位置。</p>
         <div class="dialog-actions bk-actions"><button class="btn-primary" id="bk-export">下載備份</button></div>
         <p class="sub" id="bk-last">${last ? `這台裝置上次匯出：${esc(last)}` : '這台裝置還沒匯出過。'}</p>
       </section>
@@ -85,6 +86,7 @@ export function mountBackup(root) {
         <thead><tr><th>資料</th><th>將新增</th><th>已存在略過</th></tr></thead>
         <tbody>${data.BACKUP_TABLES.filter((t) => plan[t].add.length || plan[t].skip).map((t) => `<tr><td>${data.BACKUP_LABELS[t]}</td><td>${plan[t].add.length}</td><td>${plan[t].skip}</td></tr>`).join('') || '<tr><td colspan="3" class="empty">沒有資料</td></tr>'}</tbody>
       </table>
+      ${plan._droppedLinks ? `<p class="warn">備份檔裡有 ${plan._droppedLinks} 個連結不是 http:// 或 https:// 開頭（可能被改過），匯入時會拿掉這些連結，其餘內容照常匯入。</p>` : ''}
       <div class="dialog-actions bk-actions"><button class="btn-primary" data-run>匯入</button></div>`;
     const total = data.BACKUP_TABLES.reduce((n, t) => n + plan[t].add.length, 0);
     const run = $('[data-run]', box);

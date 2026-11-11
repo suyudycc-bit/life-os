@@ -4,9 +4,9 @@
 import * as config from '../config.js';
 import * as data from '../data.js';
 import { state, refreshTasks, refreshAreas } from '../store.js';
-import { $, esc, toast, linkLabel, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js';
+import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js';
 import { today, formatShort, formatHMS } from '../dates.js';
-import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags } from './task-actions.js';
+import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, openContinueDialog, askSameCase } from './task-actions.js';
 import { openAreaDialog } from './area-dialog.js';
 import { mountCases, openPhrases } from './cases.js';
 
@@ -69,7 +69,7 @@ export function dailyReport(day = today()) {
     backlog: cols.backlog,
   };
   const note = (t) => (state.memosByTask[t.id] || [])[0]?.body || '';
-  const link = (t) => (t.links || []).find((u) => /^https?:\/\//i.test(u)) || '';
+  const link = (t) => (t.links || []).map(safeHref).find(Boolean) || ''; // 資安 20261111：只取 http(s)
   const td = 'vertical-align:top;padding:6px 8px;border:1px solid #000;background:#ffffff;';
   const head = (c) => `<td style="background:#ffffff;color:#C00000;text-align:center;font-weight:bold;padding:6px;border:1px solid #000;">${esc(c.label)}</td>`;
   const cell = (t) => {
@@ -184,7 +184,7 @@ export function mountWorkBoard(root) {
   body.addEventListener('pointerdown', (e) => {
     const card = e.target.closest('.wb-card');
     // 標題（點一下編輯）也可以拖；只有底下的操作按鈕、連結不能當拖曳起點
-    if (!card || e.button > 0 || e.target.closest('.wb-actions button, a, input, select, textarea')) return;
+    if (!card || e.button > 0 || e.target.closest('.wb-actions button, .wb-cont, a, input, select, textarea')) return;
     drag = { card, x: e.clientX, y: e.clientY, active: false, pointerId: e.pointerId };
   });
   body.addEventListener('pointermove', (e) => {
@@ -252,6 +252,7 @@ export function mountWorkBoard(root) {
       } else startTimer(t);
     }
     if (b.dataset.act === 'done') await moveTo(t.id, 'done');
+    if (b.dataset.act === 'continue') openContinueDialog(t); // 20261111：今日歸今日，接續到明天／累積未完成
     if (b.dataset.act === 'delete') await deleteCard(t);
   });
 
@@ -326,15 +327,24 @@ export function mountWorkBoard(root) {
     try { links = data.parseLinks(f.link.value); } catch (err) { toast(err.message, true); return; }
     try {
       // 工作種類、專案標籤可選既有的或直接打新名稱（存檔時找同名或建立；專案標籤不建立 projects 的專案）
+      // 20261111：同連結＝自動沿用既有案號；同標題＝問是不是同一個案件；都不是就給下一個編號
+      const match = data.findSameCase(state.tasks, { title: f.title.value, links }, state.areasById);
+      let case_no = null;
+      if (match?.reason === 'link') case_no = match.case_no;
+      if (match?.reason === 'title') {
+        const ans = await askSameCase(match);
+        if (!ans) return; // 取消：不新增，表單內容保留
+        if (ans === 'same') case_no = match.case_no;
+      }
       const tags = await resolveWorkTags({ type: f.work_type.value, project: f.work_project_tag.value });
-      await data.createWorkTask({
-        title: f.title.value, area_id: area.id, ...tags, due_date: f.due_date.value || null, links,
+      const created = await data.createWorkTask({
+        title: f.title.value, area_id: area.id, ...tags, due_date: f.due_date.value || null, links, case_no,
       }, state.tasks);
       f.reset(); // 重畫會保留表單內容，送出成功後先清空
       delete f.dataset.titleFor;
       f.title.placeholder = '新接一件工作…';
       await refreshTasks();
-      toast('已新增工作');
+      toast(case_no ? `已新增工作，沿用案件 ${created.case_no}${match.reason === 'link' ? '（相同連結）' : '（同一個案件）'}` : '已新增工作');
       body.querySelector('.wb-add input[name=title]')?.focus();
     } catch (err) {
       toast(err.message, true);
@@ -358,6 +368,7 @@ export function mountWorkBoard(root) {
           <span class="wb-case">${esc(t.case_no || '—')}</span>
           ${due && due !== day ? `<span class="wb-due ${late ? 'late' : ''}">${late ? '已過期 ' : '預定 '}${formatShort(due)}</span>` : ''}
           ${t.starred ? '<span class="wb-star" title="星標">★</span>' : ''}
+          ${col === 'new' || col === 'inprogress' ? '<button type="button" class="btn-ghost wb-cont" data-act="continue" title="今天這張標完成，接續到明天或累積未完成（同案號）" aria-label="接續到明天或累積未完成">⇢ 接續</button>' : ''}
         </div>
         <button type="button" class="wb-title" data-act="edit" title="編輯工作">${esc(t.title)}</button>
         ${tag || ptag || project ? `<div class="wb-tags">
@@ -365,7 +376,7 @@ export function mountWorkBoard(root) {
           ${ptag ? `<span class="wb-ptag" title="專案標籤">#${esc(ptag.label)}</span>` : ''}
           ${project ? `<span class="wb-project" title="專案">📁 ${esc(project.name)}</span>` : ''}</div>` : ''}
         ${memo ? `<p class="wb-memo" title="最新進度"><b>進度</b>${esc(memo.body)}</p>` : ''}
-        ${links.length ? `<div class="wb-links">${links.map((u) => `<a class="link-chip" href="${esc(u)}" target="_blank" rel="noopener noreferrer" title="${esc(u)}">🔗 ${esc(linkLabel(u))}</a>`).join('')}</div>` : ''}
+        ${links.length ? `<div class="wb-links">${links.map((u) => linkChip(u)).join('')}</div>` : ''}
         <div class="wb-actions">
           ${t.status !== 'done' ? `<button type="button" class="btn-timer ${timing ? 'on' : ''}" data-act="timer">${timing ? `⏸ <span class="clock" data-since="${state.running.started_at}"></span>` : '▶ 計時'}</button>` : ''}
           ${t.actual_sec ? `<span class="wb-spent" title="累計用時">${formatHMS(t.actual_sec)}</span>` : ''}
@@ -440,7 +451,7 @@ export function mountWorkBoard(root) {
           </div>`).join('')}</div>
       </section>`;
     body.innerHTML = `<div class="wb-board">${group('today', '本日工作')}${group('next', '後續工作')}</div>
-      <p class="sub wb-hint">拖曳卡片換欄（也可點卡片後按左右鍵）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點標題可編輯，「進度」記錄每天做到哪裡。</p>`;
+      <p class="sub wb-hint">拖曳卡片換欄（也可點卡片後按左右鍵）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點標題可編輯，「進度」記錄每天做到哪裡；今天沒做完、明天要接著做的按「⇢ 接續」（今天這張算完成，另建同案號的新卡）。</p>`;
     // 重畫時保留還沒送出的連結與名稱（貼網址後正在讀標題時也不會中斷）
     const form = body.querySelector('.wb-add');
     if (form && keep) {

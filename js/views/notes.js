@@ -5,14 +5,22 @@ import { $, esc, toast, confirmDialog, areaChip, linkify, formatDateTime } from 
 
 const ui = { q: '', areaId: '', tag: '' };
 
-/** 記錄／編輯靈感的彈窗（總覽的快速記錄也用這個） */
+const NOTE_SAVE_DELAY = 800; // 停止輸入多久後自動儲存（毫秒），同月回顧
+const nowHM = () => new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+/**
+ * 記錄／編輯靈感的彈窗（總覽的快速記錄、跟進對象也用這個）。
+ * 20261111 B1 自動儲存：停止輸入 0.8 秒就存；關閉、Esc、點外面、切頁都先存完才關，不會丟掉打過的字。
+ * 新靈感第一次有內容（標題或正文）才建立，之後都更新同一則（記住 id，存檔排隊依序執行，不會建兩則）；完全空白的不建立。
+ */
 export function openNoteDialog(note = null, preset = {}) {
   const dlg = $('#note-dialog');
-  const n = note || { title: '', body: '', area_id: '', tags: [], ...preset };
+  // 領域：每則靈感都要掛領域（CLAUDE.md），新的預設＝目前篩選的領域，沒有就用第一個領域
+  const n = note || { title: '', body: '', tags: [], ...preset, area_id: preset.area_id || state.areas[0]?.id || '' };
   dlg.innerHTML = `
-    <form>
-      <h2>${note ? '編輯靈感' : '記錄靈感'}</h2>
-      <label>標題<input name="title" required maxlength="120" value="${esc(n.title)}"></label>
+    <form autocomplete="off">
+      <div class="day-head"><h2>${note ? '編輯靈感' : '記錄靈感'}</h2><span class="sub nt-save" role="status"></span></div>
+      <label>標題<input name="title" maxlength="120" placeholder="留白會用正文第一行當標題" value="${esc(n.title)}"></label>
       <div class="row">
         <label>領域<select name="area_id"><option value="">（不分領域）</option>
           ${state.areas.map((a) => `<option value="${a.id}" ${a.id === n.area_id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
@@ -21,38 +29,112 @@ export function openNoteDialog(note = null, preset = {}) {
       </div>
       <label>正文<textarea name="body" rows="8" placeholder="想法、筆記、連結都可以（網址會自動變成連結）">${esc(n.body || '')}</textarea></label>
       ${note ? `<p class="sub">建立 ${formatDateTime(note.created_at)}・更新 ${formatDateTime(note.updated_at)}</p>` : ''}
+      <p class="sub nt-autosave-hint">會自動儲存，直接關閉也不會遺失。</p>
       <div class="dialog-actions">
-        ${note ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
-        <button type="button" class="btn-ghost" data-cancel>取消</button>
-        <button class="btn-primary">儲存</button>
+        <button type="button" class="btn-ghost danger" data-del style="margin-right:auto" ${note ? '' : 'hidden'}>刪除</button>
+        <button type="button" class="btn-ghost" data-close>關閉</button>
+        <button class="btn-primary">完成</button>
       </div>
     </form>`;
   const form = $('form', dlg);
-  $('[data-cancel]', dlg).onclick = () => dlg.close();
-  const del = $('[data-del]', dlg);
-  if (del) {
-    del.onclick = async () => {
-      if (!(await confirmDialog(`確定刪除「${note.title}」？此操作無法復原。`))) return;
-      try {
-        await data.deleteNote(note.id);
-        dlg.close();
-        await refreshNotes();
-        toast('已刪除');
-      } catch (e) {
-        toast(e.message, true);
-      }
-    };
-  }
-  form.onsubmit = async (e) => {
-    e.preventDefault();
+  const statusEl = $('.nt-save', dlg);
+  // 這次開啟的狀態；form 是這次的表單（就算之後對話框被換掉，存檔仍讀這份）
+  const s = {
+    id: note?.id || null,
+    // 從總覽「更多欄位…」帶進來的字也要存，所以一開始就算有修改
+    dirty: !note && !!(String(preset.title || '').trim() || String(preset.body || '').trim()),
+    timer: null, saved: false, closing: false, closed: false,
+  };
+  let chain = Promise.resolve(true); // 存檔排隊：前一次（尤其是建立）完成後才存下一次，確保只有一個 id
+
+  async function doSave() {
+    if (!s.dirty || s.closed === 'deleted') return true;
     const f = new FormData(form);
+    const title = String(f.get('title') || '').trim();
+    const body = String(f.get('body') || '').trim();
+    s.dirty = false;
+    if (!title && !body) {
+      statusEl.textContent = s.id ? '標題和正文都空白，不會儲存（保留上一次的內容）' : '';
+      return true;
+    }
     try {
-      await data.saveNote({ id: note?.id, title: f.get('title'), area_id: f.get('area_id'), tags: f.get('tags'), body: f.get('body') });
+      const saved = await data.saveNote({ id: s.id || undefined, title: title || data.noteFallbackTitle(body),
+        area_id: f.get('area_id'), tags: f.get('tags'), body });
+      s.id = saved.id;
+      s.saved = true;
+      $('[data-del]', form).hidden = false;
+      statusEl.textContent = `已自動儲存 ${nowHM()}`;
+      return true;
+    } catch (e) {
+      s.dirty = true;
+      statusEl.textContent = `儲存失敗：${e.message}（會再試一次）`;
+      clearTimeout(s.timer);
+      s.timer = setTimeout(flush, 3000);
+      return false;
+    }
+  }
+  function flush() {
+    clearTimeout(s.timer);
+    chain = chain.then(doSave);
+    return chain;
+  }
+  const onHash = () => closeDialog(); // 打字中換頁（瀏覽器上一頁、快捷鍵）：先存再關
+  async function closeDialog() {
+    if (s.closing || s.closed) return;
+    s.closing = true;
+    if (s.dirty) statusEl.textContent = '儲存中…';
+    const ok = await flush();
+    s.closing = false;
+    if (!ok) { toast('靈感還沒存好，會再試一次；存好後再關閉', true); return; }
+    if (dlg.open) dlg.close(); // close 事件會收尾
+    else finish();
+  }
+  function finish() {
+    if (s.closed) return;
+    s.closed = s.closed || true;
+    clearTimeout(s.timer);
+    window.removeEventListener('hashchange', onHash);
+    if (s.saved) refreshNotes().then(() => toast(note ? '已更新' : '已記錄')).catch((e) => toast(e.message, true));
+  }
+
+  form.addEventListener('input', () => {
+    s.dirty = true;
+    statusEl.textContent = '編輯中…';
+    clearTimeout(s.timer);
+    s.timer = setTimeout(flush, NOTE_SAVE_DELAY);
+  });
+  form.addEventListener('change', () => { s.dirty = true; flush(); }); // 領域下拉選單
+  form.addEventListener('focusout', () => { if (s.dirty) flush(); });
+  form.onsubmit = (e) => { e.preventDefault(); closeDialog(); };
+  $('[data-close]', dlg).onclick = () => closeDialog();
+  dlg.oncancel = (e) => { e.preventDefault(); closeDialog(); }; // Esc
+  // 點對話框外面（遮罩）＝關閉；點對話框內的空白處不算
+  dlg.onclick = (e) => {
+    if (e.target !== dlg) return;
+    const r = dlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeDialog();
+  };
+  // 其他程式直接關掉對話框時：沒存的照樣存
+  dlg.onclose = () => { if (s.dirty) flush().then(finish); else finish(); };
+  window.addEventListener('hashchange', onHash);
+
+  $('[data-del]', dlg).onclick = async () => {
+    const title = form.title.value.trim() || note?.title || '這則靈感';
+    if (!(await confirmDialog(`確定刪除「${title}」？會先放進垃圾桶，30 天內可還原。`))) return;
+    clearTimeout(s.timer);
+    s.dirty = false;
+    await chain; // 等正在存的那次完成，才知道要刪哪一則
+    if (!s.id) { dlg.close(); return; }
+    try {
+      await data.deleteNote(s.id);
+      s.saved = false;
+      s.closed = 'deleted';
+      window.removeEventListener('hashchange', onHash);
       dlg.close();
       await refreshNotes();
-      toast(note ? '已更新' : '已記錄');
-    } catch (err) {
-      toast(err.message, true);
+      toast('已刪除');
+    } catch (e) {
+      toast(e.message, true);
     }
   };
   dlg.showModal();
