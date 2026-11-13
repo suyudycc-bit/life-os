@@ -25,6 +25,7 @@ import { mountTags } from './views/tags.js';
 import { mountReflect } from './views/reflect.js';
 import { mountFeedback, openFeedbackDialog } from './views/feedback.js';
 import { mountQuotes } from './views/quotes-book.js';
+import { mountTools } from './views/tools.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -52,6 +53,7 @@ const ICONS = {
   // 內在整理：一張摺角便籤＋一道起伏（情緒）
   reflect: '<path d="M5 4h14v10l-6 6H5z"/><path d="M13 20v-6h6"/><path d="M8 9.5c1.2-1.6 2.6-1.6 3.8 0s2.6 1.6 3.8 0"/>',
   quotes: '<path d="M5 6h14v12H5z"/><path d="M8.5 10.5c0-1 .7-1.7 1.6-1.7M8.5 10.5v2.2h2.1v-2.2H8.5zM13.4 10.5c0-1 .7-1.7 1.6-1.7M13.4 10.5v2.2h2.1v-2.2h-2.1z"/>',
+  tools: '<path d="M4 9h16v10H4z"/><path d="M9 9V6.5A1.5 1.5 0 0 1 10.5 5h3A1.5 1.5 0 0 1 15 6.5V9M4 13.5h16M10.5 13.5v2h3v-2"/>',
   bucket: '<path d="M6 4h12v16l-6-4-6 4z"/><path d="m9.5 9.5 2 2 3.5-3.5"/>',
   // 標籤與分類：一張吊牌
   tags: '<path d="M4 4h7l9 9-7 7-9-9z"/><path d="M8 8h.01"/>',
@@ -82,6 +84,7 @@ const ROUTES = [
   { id: 'notes', label: '靈感知識庫', mount: mountNotes, group: '收藏' },
   { id: 'media', label: '書影單', mount: mountMedia, group: '收藏' },
   { id: 'quotes', label: '佳句本', mount: mountQuotes, group: '收藏' }, // 20261112 來自回饋
+  { id: 'tools', label: '工具箱', mount: mountTools, group: '收藏' }, // 20261114 來自回饋
   { id: 'bucket', label: '想做清單', mount: mountBucket, group: '收藏' },
   { id: 'tags', label: '標籤與分類', mount: mountTags, group: '設定' },
   { id: 'backup', label: '數據與備份', mount: mountBackup, group: '設定' },

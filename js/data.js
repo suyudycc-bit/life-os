@@ -883,14 +883,15 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'inbox_items', 'contact_stages', 'contacts', 'contact_logs',
   'reflections', // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
   'feedback', // 20261111 回饋匣（不參照其他表）
-  'quotes']; // 20261112 佳句本（參照 media_items）
+  'quotes', // 20261112 佳句本（參照 media_items）
+  'tools']; // 20261114 工具箱（不參照其他表）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
   work_tags: '工作種類', routine_phrases: '常用詞組',
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
-  reflections: '內在整理', feedback: '回饋', quotes: '佳句本',
+  reflections: '內在整理', feedback: '回饋', quotes: '佳句本', tools: '工具箱',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -956,6 +957,7 @@ const NATURAL_KEY = {
   reflections: (r) => `${r.kind}|${r.entry_date}|${r.created_at}`,
   feedback: (r) => `${r.created_at}|${r.body}`,
   quotes: (r) => `${r.body}|${r.created_at}`,
+  tools: (r) => `${r.name}|${r.created_at}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -1654,12 +1656,13 @@ const TRASH_SPEC = {
   inbox_items: { label: (r) => r.title || r.url || (r.body || '').slice(0, 40) },
   routine_phrases: { label: (r) => (r.body || '').slice(0, 40) },
   quotes: { label: (r) => (r.body || '').split('\n')[0].slice(0, 40) },
+  tools: { label: (r) => r.name },
   reflections: { label: (r) => `${REFLECT_KINDS[r.kind] || '便籤'}・${(r.event || '').split('\n')[0].slice(0, 40) || '（沒寫事件）'}` },
 };
 export const TRASH_LABELS = { tasks: '任務', projects: '專案', goals: '目標', habits: '習慣', notes: '靈感', contacts: '跟進對象',
   contact_stages: '跟進階段', work_tags: '標籤', task_memos: '進度 memo', time_entries: '計時', media_items: '書影單',
   bucket_items: '想做清單', future_events: 'Future Log', inbox_items: '待看清單', routine_phrases: '常用詞組',
-  reflections: '內在整理', quotes: '佳句' };
+  reflections: '內在整理', quotes: '佳句', tools: '工具' };
 
 /** 刪除一筆：先存進垃圾桶，再刪除。areas 不走這裡（領域有任務掛著時資料庫會擋） */
 export async function trashDelete(table, id) {
@@ -3050,3 +3053,67 @@ export async function reorderColumn(orderedIds, tasksById) {
   return updated;
 }
 
+// ===== 工具箱 20261114（來自回饋 34904791；migration 20261114_tools.sql）=====
+export const TOOL_KINDS = { mine: '我做的', saved: '收藏的' };
+export const TOOL_STATUS = { want: '想試', tried: '試過', using: '在用' };
+export const TOOL_CATEGORIES = ['自動化', '資料整理', 'AI', '寫作', '設計', '工作'];
+export const TOOL_PLATFORMS = ['Google Apps Script', '網站', 'Google 試算表', 'Chrome 擴充', 'iOS 捷徑', 'Notion', '其他'];
+
+export async function listTools() {
+  return must(await supabase.from('tools').select('*').order('created_at', { ascending: false }));
+}
+
+/** 新增或修改；網址只收 http(s)（同資安規則），回傳那一列 */
+export async function saveTool(t) {
+  const name = String(t.name || '').trim();
+  if (!name) throw new Error('請輸入工具名稱');
+  const clean = (v, max) => { const x = String(v ?? '').trim(); return x ? x.slice(0, max) : null; };
+  const web = (v, label) => {
+    const x = clean(v, 2000);
+    if (x && !isWebUrl(x)) throw new Error(`${label}只接受 http:// 或 https:// 開頭的網址`);
+    return x;
+  };
+  const kind = t.kind === 'mine' ? 'mine' : 'saved';
+  const row = {
+    name: name.slice(0, 120), kind, url: web(t.url, '使用網址'), admin_url: kind === 'mine' ? web(t.admin_url, '後台／原始碼網址') : null,
+    category: clean(t.category, 40), platform: clean(t.platform, 40), description: clean(t.description, 4000),
+    status: kind === 'saved' && TOOL_STATUS[t.status] ? t.status : null, starred: Boolean(t.starred),
+    updated_at: new Date().toISOString(),
+  };
+  if (t.id) {
+    const rows = must(await supabase.from('tools').update(row).eq('id', t.id).select());
+    if (rows.length !== 1) throw new Error('找不到這個工具（可能已被刪除）');
+    return rows[0];
+  }
+  return must(await supabase.from('tools').insert(row).select().single());
+}
+
+export async function setToolStarred(id, starred) {
+  const rows = must(await supabase.from('tools').update({ starred: Boolean(starred), updated_at: new Date().toISOString() }).eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error('找不到這個工具（可能已被刪除）');
+}
+
+export const deleteTool = (id) => trashDelete('tools', id);
+
+/** 篩選與排序：類型、分類、關鍵字；常用在前，再依最近更新 */
+export function filterTools(tools, { kind = '', category = '', q = '' } = {}) {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return tools.filter((t) => (!kind || t.kind === kind) && (!category || t.category === category)
+    && words.every((w) => [t.name, t.category, t.platform, t.description, t.url].join(' ').toLowerCase().includes(w)))
+    .sort((a, b) => (b.starred - a.starred) || String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
+}
+
+/** 分類建議：預設＋已用過的 */
+export function toolCategories(tools) {
+  return [...new Set([...TOOL_CATEGORIES, ...tools.map((t) => t.category).filter(Boolean)])];
+}
+export function toolPlatforms(tools) {
+  return [...new Set([...TOOL_PLATFORMS, ...tools.map((t) => t.platform).filter(Boolean)])];
+}
+
+/** 待看清單 → 工具箱：fields 是對話框填好的欄位（預設收藏的、想試）；存好後把那則標成已處理 */
+export async function inboxToTool(it, fields = {}) {
+  const saved = await saveTool({ kind: 'saved', status: 'want', ...fields, url: fields.url || it.url || null });
+  await setInboxDone(it.id, true);
+  return saved;
+}

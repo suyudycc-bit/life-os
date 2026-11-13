@@ -51,6 +51,8 @@ const DEFAULTS = {
   feedback: () => ({ page: null, kind: 'idea', status: 'new', reply: null, updated_at: null }),
   // migration 20261112_quotes（佳句本）
   quotes: () => ({ author: null, source: null, thought: null, media_id: null, in_daily: true, updated_at: null }),
+  // migration 20261114_tools（工具箱）
+  tools: () => ({ kind: 'saved', url: null, admin_url: null, category: null, platform: null, description: null, status: null, starred: false, updated_at: null }),
 };
 
 function dailySummary(tasks, areas = []) {

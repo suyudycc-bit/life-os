@@ -2087,6 +2087,34 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .wb-card-head .wb-edit { margin-left: auto; padding: 0 6px; font-size: 13px; line-height: 1.4; }
 .wb-card-head .wb-cont + .wb-edit { margin-left: 0; }
 
+/* ===== 工具箱 20261114（來自回饋 34904791）===== */
+.tl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.tl-filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+.tl-filters input { flex: 1 1 200px; }
+.tl-filters select { flex: 0 1 180px; }
+.tl-list { list-style: none; margin: 0; padding: 0; }
+.tl-item { padding: 12px 0 8px; border-top: 1px dashed var(--line); }
+.tl-item:first-child { border-top: 0; }
+.tl-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tl-name { margin: 0; font-size: 16.5px; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tl-star { border: 0; background: none; font-size: 18px; line-height: 1; padding: 2px; cursor: pointer; color: var(--mute); }
+.tl-star.on { color: #d4a017; }
+.tl-kind { font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 3px; white-space: nowrap; color: var(--text-2); }
+.tl-kind.tl-mine { border-color: var(--ink); color: var(--ink); }
+.tl-meta { margin: 2px 0 0 28px; font-size: 13px; color: var(--sub); }
+.tl-desc { margin: 4px 0 0 28px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tl-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 0 28px; }
+.tl-admin .link-chip::before { content: "後台 "; color: var(--sub); }
+.tl-date { margin-left: auto; font-size: 12.5px; }
+.tl-foot .btn-ghost { font-size: 13px; padding: 2px 8px; }
+.tl-form { display: flex; flex-direction: column; gap: 8px; }
+.tl-form label { display: flex; flex-direction: column; gap: 4px; }
+.tl-form label.check { flex-direction: row; align-items: center; gap: 6px; }
+.tl-form input:not([type=checkbox]), .tl-form select, .tl-form textarea { width: 100%; box-sizing: border-box; }
+.tl-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tl-row label[hidden] { display: none; }
+@container main (max-width: 560px) { .tl-row { grid-template-columns: minmax(0, 1fr); } .tl-meta, .tl-desc, .tl-foot { margin-left: 0; } }
+
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
    原則：短（≤260ms）、只動 opacity／transform、拖移中與完成動畫中的元素不套用。 */

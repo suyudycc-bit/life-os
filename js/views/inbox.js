@@ -4,6 +4,7 @@
 import * as data from '../data.js';
 import { state, refreshNotes, refreshTasks } from '../store.js';
 import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js';
+import { openToolDialog } from './tools.js';
 
 const FILTER_KEY = 'lifeos-inbox-filter';
 const PENDING_KEY = 'lifeos-inbox-share'; // 未登入時先記住分享（sessionStorage），登入後繼續
@@ -164,6 +165,11 @@ export function mountInbox(root) {
       if (act === 'edit') openItemDialog(it);
       if (act === 'note') await toNote(it);
       if (act === 'task') openTaskDialog(it);
+      if (act === 'tool') { // 20261114 工具箱：社群上看到、之後可能用到的工具
+        const name = (it.title || (it.body || '').split('\n')[0] || (it.url ? linkLabel(it.url) : '')).slice(0, 120);
+        openToolDialog(null, { kind: 'saved', status: 'want', name, url: it.url || '', description: it.body && it.body !== name ? it.body : '',
+          save: (fields) => data.inboxToTool(it, fields) }, async () => { changed(); await load(); toast('已存到工具箱，並標成處理完'); });
+      }
       if (act === 'delete') {
         if (!(await confirmDialog(`把「${labelOf(it)}」移到垃圾桶？30 天內可在「數據與備份」還原。`))) return;
         await data.deleteInboxItem(it.id);
@@ -357,6 +363,7 @@ export function mountInbox(root) {
             : '<button type="button" class="btn-ghost" data-act="done">已處理</button>'}
           <button type="button" class="btn-ghost" data-act="note">轉靈感</button>
           <button type="button" class="btn-ghost" data-act="task">轉任務</button>
+          <button type="button" class="btn-ghost" data-act="tool" title="存到工具箱（收藏的工具）">存到工具箱</button>
           <button type="button" class="btn-ghost" data-act="edit">編輯</button>
           <button type="button" class="btn-ghost danger" data-act="delete">刪除</button>
         </span>
