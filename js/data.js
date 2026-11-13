@@ -3057,7 +3057,7 @@ export async function reorderColumn(orderedIds, tasksById) {
 export const TOOL_KINDS = { mine: '我做的', saved: '收藏的' };
 export const TOOL_STATUS = { want: '想試', tried: '試過', using: '在用' };
 export const TOOL_CATEGORIES = ['自動化', '資料整理', 'AI', '寫作', '設計', '工作'];
-export const TOOL_PLATFORMS = ['Google Apps Script', '網站', 'Google 試算表', 'Chrome 擴充', 'iOS 捷徑', 'Notion', '其他'];
+export const TOOL_PLATFORMS = ['AI Agent', 'Google Apps Script', '網站', 'Google 試算表', 'Chrome 擴充', 'iOS 捷徑', 'Notion', '其他']; // 20261114 使用者要求加 AI Agent
 
 export async function listTools() {
   return must(await supabase.from('tools').select('*').order('created_at', { ascending: false }));
@@ -3103,9 +3103,15 @@ export function filterTools(tools, { kind = '', category = '', q = '' } = {}) {
     .sort((a, b) => (b.starred - a.starred) || String(b.updated_at || b.created_at).localeCompare(String(a.updated_at || a.created_at)));
 }
 
-/** 分類建議：預設＋已用過的 */
-export function toolCategories(tools) {
-  return [...new Set([...TOOL_CATEGORIES, ...tools.map((t) => t.category).filter(Boolean)])];
+/**
+ * 分類建議（20261114：待看清單與工具箱共用一份，分一次就好）：
+ * 工具箱預設分類 → 待看清單用過的（多的在前）→ 工具箱用過的。待看清單「存到工具箱」時直接帶過去。
+ */
+export function sharedCategories(inboxItems = [], tools = []) {
+  return [...new Set([...TOOL_CATEGORIES, ...inboxCategories(inboxItems), ...tools.map((t) => t.category).filter(Boolean)])];
+}
+export function toolCategories(tools, inboxItems = []) {
+  return sharedCategories(inboxItems, tools);
 }
 export function toolPlatforms(tools) {
   return [...new Set([...TOOL_PLATFORMS, ...tools.map((t) => t.platform).filter(Boolean)])];

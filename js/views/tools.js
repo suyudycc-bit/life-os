@@ -11,6 +11,7 @@ export function mountTools(root) {
   try { Object.assign(ui, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}'), { q: '' }); } catch { /* 忽略 */ }
   const saveUi = () => { try { localStorage.setItem(FILTER_KEY, JSON.stringify({ kind: ui.kind, category: ui.category })); } catch { /* 忽略 */ } };
   let tools = [];
+  let inbox = []; // 分類和待看清單共用（20261114）
   let loaded = false;
 
   root.innerHTML = `
@@ -27,7 +28,7 @@ export function mountTools(root) {
       <ul class="tl-list" id="tl-list"></ul>
     </section>`;
 
-  $('#tl-new', root).onclick = () => openToolDialog(null, { kind: ui.kind || 'mine', category: ui.category }, load, tools);
+  $('#tl-new', root).onclick = () => openToolDialog(null, { kind: ui.kind || 'mine', category: ui.category }, load, tools, inbox);
   $('#tl-kind', root).addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -43,7 +44,7 @@ export function mountTools(root) {
     const act = e.target.closest('[data-act]')?.dataset.act;
     try {
       if (act === 'star') { await data.setToolStarred(t.id, !t.starred); await load(); }
-      if (act === 'edit') openToolDialog(t, {}, load, tools);
+      if (act === 'edit') openToolDialog(t, {}, load, tools, inbox);
       if (act === 'del') {
         if (!(await confirmDialog(`把「${t.name}」移到垃圾桶？30 天內可在「數據與備份」還原。`))) return;
         await data.deleteTool(t.id);
@@ -88,6 +89,7 @@ export function mountTools(root) {
   async function load() {
     try {
       tools = await data.listTools();
+      inbox = await data.listInbox().catch(() => []);
       loaded = true;
     } catch (err) {
       $('#tl-list', root).innerHTML = `<li class="warn">讀取工具箱失敗：${esc(err.message)}（如果是第一次使用，需要先執行 migration 20261114_tools.sql）</li>`;
@@ -101,7 +103,7 @@ export function mountTools(root) {
 }
 
 /** 新增／修改工具（工具箱頁、待看清單「存到工具箱」共用）。preset：預設欄位；onSaved：存好之後 */
-export function openToolDialog(tool, preset = {}, onSaved = null, existing = []) {
+export function openToolDialog(tool, preset = {}, onSaved = null, existing = [], inboxItems = []) {
   let dlg = $('#tool-dialog');
   if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'tool-dialog'; document.body.append(dlg); }
   const v = { kind: 'mine', ...preset, ...(tool || {}) };
@@ -122,7 +124,7 @@ export function openToolDialog(tool, preset = {}, onSaved = null, existing = [])
         <label class="tl-saved-only">狀態<select name="status">
           ${Object.entries(data.TOOL_STATUS).map(([k, l]) => `<option value="${k}" ${(v.status || 'want') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
-      <datalist id="tl-dl-cat">${opts(data.toolCategories(existing))}</datalist>
+      <datalist id="tl-dl-cat">${opts(data.toolCategories(existing, inboxItems))}</datalist>
       <datalist id="tl-dl-plat">${opts(data.toolPlatforms(existing))}</datalist>
       <label>說明（做什麼用、怎麼用）<textarea name="description" rows="4" maxlength="4000">${esc(v.description || '')}</textarea></label>
       <label class="check"><input type="checkbox" name="starred" ${v.starred ? 'checked' : ''}> 常用（排在前面）</label>

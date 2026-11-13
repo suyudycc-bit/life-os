@@ -75,6 +75,7 @@ function dialogEl() {
 export function mountInbox(root) {
   const ui = loadFilter();
   let items = [];
+  let tools = []; // 只拿來給分類建議（待看清單與工具箱共用分類）
   let loaded = false;
   captureShare();
 
@@ -167,8 +168,8 @@ export function mountInbox(root) {
       if (act === 'task') openTaskDialog(it);
       if (act === 'tool') { // 20261114 工具箱：社群上看到、之後可能用到的工具
         const name = (it.title || (it.body || '').split('\n')[0] || (it.url ? linkLabel(it.url) : '')).slice(0, 120);
-        openToolDialog(null, { kind: 'saved', status: 'want', name, url: it.url || '', description: it.body && it.body !== name ? it.body : '',
-          save: (fields) => data.inboxToTool(it, fields) }, async () => { changed(); await load(); toast('已存到工具箱，並標成處理完'); });
+        openToolDialog(null, { kind: 'saved', status: 'want', name, url: it.url || '', description: it.body && it.body !== name ? it.body : '', category: it.category || '',
+          save: (fields) => data.inboxToTool(it, fields) }, async () => { changed(); await load(); toast('已存到工具箱，並標成處理完'); }, tools, items);
       }
       if (act === 'delete') {
         if (!(await confirmDialog(`把「${labelOf(it)}」移到垃圾桶？30 天內可在「數據與備份」還原。`))) return;
@@ -193,7 +194,7 @@ export function mountInbox(root) {
       pre = { url: share.url || split.url, title: share.title || '', body: share.url ? share.text || '' : split.body };
     }
     const dup = isShare ? data.inboxFindUrl(items, pre.url) : null;
-    const cats = data.inboxCategories(items);
+    const cats = data.sharedCategories(items, tools); // 20261114：和工具箱共用分類
     dlg.innerHTML = `
       <form>
         <h2>${isShare ? '存到待看清單' : '編輯'}</h2>
@@ -202,7 +203,7 @@ export function mountInbox(root) {
         <p class="ib-src-line">來源：<b id="ib-src">${esc(data.INBOX_SOURCES[pre.url ? data.inboxSourceOf(pre.url) : 'other'])}</b><span class="sub">（從網址自動判斷）</span></p>
         <label>標題<input name="title" maxlength="200" value="${esc(pre.title || '')}" placeholder="選填，例如：理財書單整理"></label>
         <label>內容<textarea name="body" rows="4" maxlength="4000">${esc(pre.body || '')}</textarea></label>
-        <label>分類<input name="category" list="ib-dlg-cats" maxlength="30" value="${esc(pre.category || '')}" placeholder="可自己打，例如：學習、投資"></label>
+        <label>分類<input name="category" list="ib-dlg-cats" maxlength="30" value="${esc(pre.category || '')}" placeholder="可選或自己打，和工具箱共用"></label>
         <datalist id="ib-dlg-cats">${cats.map((c) => `<option value="${esc(c)}"></option>`).join('')}</datalist>
         ${cats.length ? `<div class="ib-cat-picks" aria-label="常用分類">${cats.slice(0, 8).map((c) =>
           `<button type="button" class="tag-btn" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}
@@ -326,6 +327,7 @@ export function mountInbox(root) {
   async function load() {
     try {
       items = await data.listInbox();
+      tools = await data.listTools().catch(() => []); // 分類和工具箱共用（20261114）
       loaded = true;
     } catch (e) {
       toast(`讀取待看清單失敗：${e.message}`, true);
@@ -389,7 +391,7 @@ export function mountInbox(root) {
     if (ui.cat && !cats.includes(ui.cat)) ui.cat = '';
     $('#ib-catf', root).innerHTML = cats.length ? ['', ...cats].map((c) =>
       `<button type="button" data-v="${esc(c)}" aria-pressed="${ui.cat === c}">${c ? esc(c) : '全部分類'}</button>`).join('') : '';
-    $('#ib-cats', root).innerHTML = cats.map((c) => `<option value="${esc(c)}"></option>`).join('');
+    $('#ib-cats', root).innerHTML = data.sharedCategories(items, tools).map((c) => `<option value="${esc(c)}"></option>`).join('');
 
     const shown = inTab.filter((it) => (!ui.source || data.inboxSourceOfItem(it) === ui.source) && (!ui.cat || it.category === ui.cat));
     // 未看：放很久的排最前面（最舊的先），其他新到舊
