@@ -1769,7 +1769,7 @@ dialog .tg-pick label.check { flex-direction: row; align-items: flex-start; colo
 /* ===== 顯化規劃・今天的我（20261108）===== */
 /* 總覽每日一句下方：左欄今日身分＋肯定語（手寫線上的一行字），右欄身分主線任務（螢光黃下一步，同專案卡片） */
 .ov-intent { margin-bottom: 22px; }
-.ovi-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; }
+.ovi-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px 24px; max-width: 720px; } /* 20261113：拿掉身分主線任務後只剩一欄 */
 .ovi-form { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ovi-row { display: flex; flex-direction: column; gap: 2px; }
 .ovi-k { font-size: 12.5px; color: var(--sub); letter-spacing: .08em; font-weight: 400; margin: 0; font-family: inherit; }
@@ -2057,6 +2057,35 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .gs-ics-saved code { font-size: 13px; overflow-wrap: anywhere; }
 /* 被 iframe 嵌入時的說明（js/frame-guard.js） */
 .frame-notice { margin: 24px 16px; font-size: 15px; color: var(--text); }
+
+/* ===== 佳句本 20261112（來自回饋）===== */
+.qb-form { display: flex; flex-direction: column; gap: 8px; }
+.qb-form label { display: flex; flex-direction: column; gap: 4px; }
+.qb-form label.check { flex-direction: row; align-items: center; gap: 6px; }
+.qb-form input:not([type=checkbox]), .qb-form select, .qb-form textarea { width: 100%; box-sizing: border-box; }
+.qb-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.qb-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.qb-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.qb-filters input { flex: 1 1 220px; }
+.qb-filters select { flex: 0 1 240px; }
+.qb-list { list-style: none; margin: 0; padding: 0; }
+.qb-item { padding: 12px 0 8px; border-top: 1px dashed var(--line); }
+.qb-item:first-child { border-top: 0; }
+.qb-body { margin: 0 0 4px; font-family: var(--f-hand); font-size: 18px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+.qb-cite { margin: 0; font-size: 13.5px; color: var(--text-2); overflow-wrap: anywhere; }
+.qb-thought { margin: 4px 0 0; padding: 4px 10px; background: var(--hl); border-radius: 2px; font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.qb-foot { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.qb-foot > .sub { margin-right: auto; font-size: 12.5px; }
+.qb-foot .btn-ghost { font-size: 13px; padding: 2px 8px; }
+.qb-daily-l { font-size: 13px; margin-right: 4px; }
+.md-quotes { white-space: nowrap; }
+@container main (max-width: 560px) { .qb-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ===== 工作看板編輯與排序 20261113（回饋 deaa6ba0、b5f99f2a）===== */
+.wb-card.drop-before { box-shadow: 0 -3px 0 var(--ink); }
+.wb-card.drop-after { box-shadow: 0 3px 0 var(--ink); }
+.wb-card-head .wb-edit { margin-left: auto; padding: 0 6px; font-size: 13px; line-height: 1.4; }
+.wb-card-head .wb-cont + .wb-edit { margin-left: 0; }
 
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。

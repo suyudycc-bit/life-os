@@ -882,14 +882,15 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'period_reviews', 'future_events', 'media_items', 'bucket_items',
   'inbox_items', 'contact_stages', 'contacts', 'contact_logs',
   'reflections', // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
-  'feedback']; // 20261111 回饋匣（不參照其他表）
+  'feedback', // 20261111 回饋匣（不參照其他表）
+  'quotes']; // 20261112 佳句本（參照 media_items）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
   work_tags: '工作種類', routine_phrases: '常用詞組',
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
-  reflections: '內在整理', feedback: '回饋',
+  reflections: '內在整理', feedback: '回饋', quotes: '佳句本',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -928,6 +929,7 @@ const BACKUP_REFS = {
   contacts: { stage_id: 'contact_stages' },
   contact_logs: { contact_id: 'contacts' },
   reflections: { task_id: 'tasks', area_id: 'areas' },
+  quotes: { media_id: 'media_items' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -953,6 +955,7 @@ const NATURAL_KEY = {
   contact_logs: (r) => `${r.contact_id}|${r.log_date}|${r.created_at}`,
   reflections: (r) => `${r.kind}|${r.entry_date}|${r.created_at}`,
   feedback: (r) => `${r.created_at}|${r.body}`,
+  quotes: (r) => `${r.body}|${r.created_at}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -1645,17 +1648,18 @@ const TRASH_SPEC = {
   work_tags: { label: (r) => r.label, setnull: { tasks: ['work_type_id', 'work_project_tag_id'] } },
   task_memos: { label: (r) => (r.body || '').slice(0, 40) },
   time_entries: { label: (r) => `計時 ${localDate(r.started_at)}` },
-  media_items: { label: (r) => r.title },
+  media_items: { label: (r) => r.title, setnull: { quotes: 'media_id' } },
   bucket_items: { label: (r) => r.title },
   future_events: { label: (r) => r.title },
   inbox_items: { label: (r) => r.title || r.url || (r.body || '').slice(0, 40) },
   routine_phrases: { label: (r) => (r.body || '').slice(0, 40) },
+  quotes: { label: (r) => (r.body || '').split('\n')[0].slice(0, 40) },
   reflections: { label: (r) => `${REFLECT_KINDS[r.kind] || '便籤'}・${(r.event || '').split('\n')[0].slice(0, 40) || '（沒寫事件）'}` },
 };
 export const TRASH_LABELS = { tasks: '任務', projects: '專案', goals: '目標', habits: '習慣', notes: '靈感', contacts: '跟進對象',
   contact_stages: '跟進階段', work_tags: '標籤', task_memos: '進度 memo', time_entries: '計時', media_items: '書影單',
   bucket_items: '想做清單', future_events: 'Future Log', inbox_items: '待看清單', routine_phrases: '常用詞組',
-  reflections: '內在整理' };
+  reflections: '內在整理', quotes: '佳句' };
 
 /** 刪除一筆：先存進垃圾桶，再刪除。areas 不走這裡（領域有任務掛著時資料庫會擋） */
 export async function trashDelete(table, id) {
@@ -1719,7 +1723,7 @@ export async function restoreTrash(trashId) {
 // 還原前的檢查：可留白的關聯若已不存在就清空（並說明）；必填的領域不存在就停下（案件編號照舊保留，20261111）
 const RESTORE_OPTIONAL_REFS = { project_id: ['projects', '專案'], goal_id: ['goals', '目標'], work_type_id: ['work_tags', '工作種類'],
   work_project_tag_id: ['work_tags', '專案標籤'], note_id: ['notes', '靈感'], stage_id: ['contact_stages', '跟進階段'], task_id: ['tasks', '任務'],
-  habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'] };
+  habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'], media_id: ['media_items', '書影單'] };
 async function restoreFixRefs(table, original) {
   const row = { ...original };
   const notes = [];
@@ -2961,3 +2965,61 @@ export function maskIcsUrl(url) {
   const v = String(url || '');
   return v.length <= 44 ? `${v.slice(0, 8)}…` : `${v.slice(0, 30)}…${v.slice(-10)}`;
 }
+
+// ===== 佳句本 20261112（來自回饋 8cd19a58；migration 20261112_quotes.sql）=====
+// 記錄佳句（可掛書影單的一本），也是總覽「每日一句」的來源之一（混合規則在 quotes.js dailyCardOf）。
+export const QUOTE_MAX = 2000;
+
+export async function listQuotes() {
+  return must(await supabase.from('quotes').select('*').order('created_at', { ascending: false }));
+}
+
+/** 新增或修改；回傳那一列。只寫有傳進來的欄位以外的固定欄位（body 必填） */
+export async function saveQuote(q) {
+  const body = String(q.body || '').trim();
+  if (!body) throw new Error('請寫下佳句');
+  if (body.length > QUOTE_MAX) throw new Error(`佳句最多 ${QUOTE_MAX} 字`);
+  const clean = (v, max) => { const t = String(v ?? '').trim(); return t ? t.slice(0, max) : null; };
+  const row = {
+    body, author: clean(q.author, 120), source: clean(q.source, 200), thought: clean(q.thought, 4000),
+    media_id: q.media_id || null, in_daily: q.in_daily !== false, updated_at: new Date().toISOString(),
+  };
+  if (q.id) {
+    const rows = must(await supabase.from('quotes').update(row).eq('id', q.id).select());
+    if (rows.length !== 1) throw new Error('找不到這則佳句（可能已被刪除）');
+    window.dispatchEvent(new Event('lifeos:quotes-changed'));
+    return rows[0];
+  }
+  const saved = must(await supabase.from('quotes').insert(row).select().single());
+  window.dispatchEvent(new Event('lifeos:quotes-changed'));
+  return saved;
+}
+
+export async function setQuoteInDaily(id, inDaily) {
+  const rows = must(await supabase.from('quotes').update({ in_daily: Boolean(inDaily), updated_at: new Date().toISOString() }).eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error('找不到這則佳句（可能已被刪除）');
+  window.dispatchEvent(new Event('lifeos:quotes-changed'));
+}
+
+export async function deleteQuote(id) {
+  await trashDelete('quotes', id);
+  window.dispatchEvent(new Event('lifeos:quotes-changed'));
+}
+
+/** 書影單每一本的佳句數 {media_id: n} */
+export function quoteCountsByMedia(quotes) {
+  const out = {};
+  for (const q of quotes) if (q.media_id) out[q.media_id] = (out[q.media_id] || 0) + 1;
+  return out;
+}
+
+/** 篩選：關鍵字（佳句、作者、出處、想法、書名）＋書影單 id */
+export function filterQuotes(quotes, { q = '', mediaId = '' } = {}, mediaById = {}) {
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return quotes.filter((x) => {
+    if (mediaId && x.media_id !== mediaId) return false;
+    const hay = [x.body, x.author, x.source, x.thought, mediaById[x.media_id]?.title].join(' ').toLowerCase();
+    return words.every((w) => hay.includes(w));
+  });
+}
+

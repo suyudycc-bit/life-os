@@ -49,6 +49,8 @@ const DEFAULTS = {
   reflections: () => ({ entry_date: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), event: null, fields: {}, wants: [], emotions: [],
     intensity_before: null, intensity_after: null, release_count: 0, feeling_after: null, next_action: null, task_id: null, area_id: null, updated_at: now() }),  // migration 20261111_feedback_box（回饋匣）
   feedback: () => ({ page: null, kind: 'idea', status: 'new', reply: null, updated_at: null }),
+  // migration 20261112_quotes（佳句本）
+  quotes: () => ({ author: null, source: null, thought: null, media_id: null, in_daily: true, updated_at: null }),
 };
 
 function dailySummary(tasks, areas = []) {
@@ -269,6 +271,10 @@ class Query {
         if (this.table === 'notes') { // media_items.note_id on delete set null（migration 20261105）
           const ids = new Set(out.map((r) => r.id));
           for (const m of db.media_items || []) if (ids.has(m.note_id)) m.note_id = null;
+        }
+        if (this.table === 'media_items') { // quotes.media_id on delete set null（migration 20261112）
+          const ids = new Set(out.map((r) => r.id));
+          for (const q of db.quotes || []) if (ids.has(q.media_id)) q.media_id = null;
         }
       }
       save(db);

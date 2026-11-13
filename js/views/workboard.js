@@ -200,13 +200,23 @@ export function mountWorkBoard(root) {
     drag.card.style.transform = `translate(${e.clientX - drag.x}px, ${e.clientY - drag.y}px) rotate(1.5deg)`;
     const col = colAt(e.clientX, e.clientY);
     body.querySelectorAll('.drop-on').forEach((c) => c !== col && c.classList.remove('drop-on'));
+    body.querySelectorAll('.drop-before, .drop-after').forEach((c) => c.classList.remove('drop-before', 'drop-after'));
     // 放開時就用拖曳過程中標示的那一欄，不在放開後重新找位置（卡片歸位會改變指標下的元素）
     drag.target = col && col.dataset.col !== drag.card.dataset.col ? col.dataset.col : null;
     if (drag.target) col.classList.add('drop-on');
+    // 20261113（回饋 b5f99f2a）：同一欄裡上下拖＝調整順序（「已完成」依完成時間排，不能調）
+    drag.reorder = null;
+    if (col && col.dataset.col === drag.card.dataset.col && col.dataset.col !== 'done') {
+      const others = [...col.querySelectorAll('.wb-card')].filter((c) => c !== drag.card);
+      const next = others.find((c) => { const r = c.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+      const prev = next ? others[others.indexOf(next) - 1] : others.at(-1);
+      drag.reorder = { nextId: next?.dataset.id || null, prevId: prev?.dataset.id || null };
+      if (next) next.classList.add('drop-before'); else if (prev) prev.classList.add('drop-after');
+    }
   });
   const endDrag = async (e) => {
     if (!drag) return;
-    const { card, active, target } = drag;
+    const { card, active, target, reorder } = drag;
     drag = null;
     if (!active) return;
     suppressClick = true;
@@ -215,9 +225,22 @@ export function mountWorkBoard(root) {
     card.classList.remove('dragging');
     body.classList.remove('is-dragging');
     body.querySelectorAll('.drop-on').forEach((c) => c.classList.remove('drop-on'));
-    if (e.type !== 'pointerup' || !target) return;
-    await moveTo(card.dataset.id, target);
+    body.querySelectorAll('.drop-before, .drop-after').forEach((c) => c.classList.remove('drop-before', 'drop-after'));
+    if (e.type !== 'pointerup') return;
+    if (target) await moveTo(card.dataset.id, target);
+    else if (reorder) await reorderCard(card.dataset.id, reorder.nextId, reorder.prevId);
   };
+
+  // 同一欄調順序：和任務管理同一套（data.moveTask 算全部未完成任務的新順序 → data.reorderTasks 只寫有變的 sort_order）
+  async function reorderCard(id, nextId, prevId) {
+    const order = data.moveTask(state.tasks, id, nextId, prevId);
+    const before = data.moveTask(state.tasks, id, null, null).join() === order.join();
+    try {
+      await data.reorderTasks(order, Object.fromEntries(state.tasks.map((t) => [t.id, t])));
+      await refreshTasks();
+      if (!before) toast('已調整順序');
+    } catch (err) { toast(err.message, true); }
+  }
   body.addEventListener('pointerup', endDrag);
   body.addEventListener('pointercancel', endDrag);
   body.addEventListener('click', (e) => {
@@ -241,7 +264,14 @@ export function mountWorkBoard(root) {
   // 卡片上的按鈕
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-act]');
-    if (!b) return;
+    if (!b) {
+      // 20261113（回饋 deaa6ba0）：點卡片任何空白處都能編輯（原本只有標題文字那一小塊可以點）
+      const card = e.target.closest('.wb-card');
+      if (!card || e.target.closest('a, button, input, select, textarea, label')) return;
+      const t = state.tasks.find((x) => x.id === card.dataset.id);
+      if (t) openTaskEditor(t);
+      return;
+    }
     const t = state.tasks.find((x) => x.id === b.closest('.wb-card')?.dataset.id);
     if (!t) return;
     if (b.dataset.act === 'edit') openTaskEditor(t);
@@ -276,7 +306,23 @@ export function mountWorkBoard(root) {
   // 鍵盤也能換欄：卡片聚焦時按左右鍵
   body.addEventListener('keydown', async (e) => {
     const card = e.target.closest?.('.wb-card');
-    if (!card || e.target !== card || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    if (!card || e.target !== card) return;
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && card.dataset.col !== 'done') {
+      // 上下鍵：在同一欄裡往上／往下移一格
+      e.preventDefault();
+      const cards = [...card.closest('.wb-col').querySelectorAll('.wb-card')];
+      const i = cards.indexOf(card);
+      const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+      if (j < 0 || j >= cards.length) return;
+      const id = card.dataset.id;
+      const rest = cards.filter((c) => c !== card);
+      const next = e.key === 'ArrowUp' ? cards[j] : rest[j];
+      const prev = e.key === 'ArrowUp' ? rest[j - 1] : cards[j];
+      await reorderCard(id, next?.dataset.id || null, prev?.dataset.id || null);
+      body.querySelector(`.wb-card[data-id="${id}"]`)?.focus();
+      return;
+    }
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     e.preventDefault();
     const ids = data.BOARD_COLUMNS.map((c) => c.id);
     const to = ids[ids.indexOf(card.dataset.col) + (e.key === 'ArrowRight' ? 1 : -1)];
@@ -363,12 +409,13 @@ export function mountWorkBoard(root) {
     const memoCount = (state.memosByTask[t.id] || []).length;
     return `
       <article class="wb-card ${timing ? 'timing' : ''} ${t.status === 'done' ? 'is-done' : ''}" data-id="${t.id}" data-col="${col}" tabindex="0"
-        aria-label="${esc(t.title)}，按左右鍵換欄">
+        aria-label="${esc(t.title)}，按左右鍵換欄、上下鍵調順序">
         <div class="wb-card-head">
           <span class="wb-case">${esc(t.case_no || '—')}</span>
           ${due && due !== day ? `<span class="wb-due ${late ? 'late' : ''}">${late ? '已過期 ' : '預定 '}${formatShort(due)}</span>` : ''}
           ${t.starred ? '<span class="wb-star" title="星標">★</span>' : ''}
           ${col === 'new' || col === 'inprogress' ? '<button type="button" class="btn-ghost wb-cont" data-act="continue" title="今天這張標完成，接續到明天或累積未完成（同案號）" aria-label="接續到明天或累積未完成">⇢ 接續</button>' : ''}
+          <button type="button" class="btn-ghost wb-edit" data-act="edit" title="編輯工作（名稱、連結、種類、日期…）" aria-label="編輯工作">✎</button>
         </div>
         <button type="button" class="wb-title" data-act="edit" title="編輯工作">${esc(t.title)}</button>
         ${tag || ptag || project ? `<div class="wb-tags">
@@ -451,7 +498,7 @@ export function mountWorkBoard(root) {
           </div>`).join('')}</div>
       </section>`;
     body.innerHTML = `<div class="wb-board">${group('today', '本日工作')}${group('next', '後續工作')}</div>
-      <p class="sub wb-hint">拖曳卡片換欄（也可點卡片後按左右鍵）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點標題可編輯，「進度」記錄每天做到哪裡；今天沒做完、明天要接著做的按「⇢ 接續」（今天這張算完成，另建同案號的新卡）。</p>`;
+      <p class="sub wb-hint">拖曳卡片換欄、在同一欄上下拖調順序（也可點卡片後按左右鍵換欄、上下鍵調順序）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點卡片或右上 ✎ 可編輯，「進度」記錄每天做到哪裡；今天沒做完、明天要接著做的按「⇢ 接續」（今天這張算完成，另建同案號的新卡）。</p>`;
     // 重畫時保留還沒送出的連結與名稱（貼網址後正在讀標題時也不會中斷）
     const form = body.querySelector('.wb-add');
     if (form && keep) {

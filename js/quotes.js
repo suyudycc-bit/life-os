@@ -155,7 +155,7 @@ export const QUOTES = [
 ];
 
 /** YYYY-MM-DD → 從 1970-01-01 起算的日序號（純日期運算，不受時區影響） */
-function dayNumber(day) {
+export function dayNumber(day) {
   const [y, m, d] = day.split('-').map(Number);
   return Math.floor(Date.UTC(y, m - 1, d) / 86400000);
 }
@@ -197,3 +197,42 @@ export function quoteCite(q) {
 export function quoteText(q) {
   return `"${q.text}"\n— ${quoteCite(q)}${q.tr ? `，${q.tr}` : ''}\n${q.zh}`;
 }
+
+// ===== 佳句本混合（20261112，來自回饋 8cd19a58）=====
+// 每日一句＝內建句子與自己的佳句（quotes 表、in_daily 為 true）混合：日序號偶數那天輪自己的佳句
+// （依建立時間排序後輪，同一天每台裝置一樣），奇數那天照原本的內建順序；沒有自己的佳句就每天都是內建。
+
+/** 統一成畫面用的格式：{ mine, id, text, zh, cite, tr, lang } */
+export function builtinCard(q) {
+  return { mine: false, id: null, text: q.text, zh: q.zh, cite: quoteCite(q), tr: q.tr || '', lang: 'en', raw: q };
+}
+export function mineCard(m, mediaTitle = '') {
+  const cite = [m.author, m.source || mediaTitle].filter(Boolean).join('，');
+  return { mine: true, id: m.id, text: m.body, zh: m.thought || '', cite, tr: '', lang: '', raw: m };
+}
+export function dailyMine(mine) {
+  return (mine || []).filter((m) => m.in_daily).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+}
+
+/** 這一天的每日一句（mine＝自己的佳句列；mediaTitleOf(id) 回傳書影單標題） */
+export function dailyCardOf(day, mine, mediaTitleOf = () => '') {
+  const pool = dailyMine(mine);
+  const n = dayNumber(day);
+  if (pool.length && n % 2 === 0) {
+    const m = pool[(n / 2) % pool.length];
+    return mineCard(m, mediaTitleOf(m.media_id));
+  }
+  return builtinCard(quoteOf(day));
+}
+
+/** 「換一句」的候選：內建全部＋自己放進每日一句的 */
+export function cardPool(mine, mediaTitleOf = () => '') {
+  return [...QUOTES.map(builtinCard), ...dailyMine(mine).map((m) => mineCard(m, mediaTitleOf(m.media_id)))];
+}
+
+/** 複製用純文字 */
+export function cardText(c) {
+  if (!c.mine) return quoteText(c.raw);
+  return `「${c.text}」${c.cite ? `\n— ${c.cite}` : ''}${c.zh ? `\n${c.zh}` : ''}`;
+}
+

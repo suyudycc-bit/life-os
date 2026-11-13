@@ -43,6 +43,9 @@ export function bindCoverFallback(root) {
   }, true);
 }
 
+// 佳句本（20261112）：每一本的佳句數；讀不到（例如還沒執行 migration）就當 0
+let quoteCounts = {};
+
 function ticketHTML(m) {
   const next = NEXT[m.status];
   const verb = VERB[m.kind];
@@ -61,6 +64,7 @@ function ticketHTML(m) {
           : m.status === 'doing' && m.started_on ? `<span class="sub md-since">${esc(formatShort(m.started_on))} 開始</span>` : ''}
         ${m.status === 'dropped' ? '<span class="sub">已放棄</span>' : ''}
         <span class="md-actions">
+          <a class="btn-ghost md-quotes" href="#/quotes/${m.id}" title="到佳句本記這${esc(MEDIA_KINDS[m.kind] || '')}的句子">${quoteCounts[m.id] ? `佳句 ${quoteCounts[m.id]}` : '＋佳句'}</a>
           ${safeHref(m.link_url) ? `<a class="btn-ghost" href="${esc(safeHref(m.link_url))}" target="_blank" rel="noopener noreferrer" title="${esc(m.link_url)}">${esc(linkLabel(m.link_url))} ↗</a>` : ''}
           ${next ? `<button type="button" class="btn-ghost md-next" data-next="${next.to}">→ ${esc(nextLabel)}</button>` : ''}
           ${m.status === 'done' && m.review ? (m.note_id
@@ -323,6 +327,7 @@ export function mountMedia(root) {
     try {
       items = await data.listMedia();
       failed = '';
+      quoteCounts = await data.listQuotes().then(data.quoteCountsByMedia).catch(() => ({}));
     } catch (e) {
       items = items || [];
       failed = e.message;

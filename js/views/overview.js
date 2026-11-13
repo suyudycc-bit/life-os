@@ -2,16 +2,16 @@
 import * as data from '../data.js';
 import { state } from '../store.js';
 import { $, durationHTML, toast, esc, areaChip, confirmDialog } from '../ui.js';
-import { refreshNotes, refreshTasks, refreshProjects } from '../store.js';
+import { refreshNotes, refreshTasks } from '../store.js';
 import { habitRowHTML, bindHabitDays } from './habits.js';
 import { openNoteDialog } from './notes.js';
 import { openExternalEvent, extTime } from './google-sync.js';
 import { today, formatShort, localDate, addDays } from '../dates.js';
 import { taskItemHTML } from './task-item.js';
-import { bindTaskList, openTaskEditor } from './task-actions.js';
+import { bindTaskList } from './task-actions.js';
 import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js';
 import { saveInboxFilter } from './inbox.js';
-import { QUOTES, quoteIndexOf, quoteCite, quoteText } from '../quotes.js';
+import { dailyCardOf, cardPool, cardText } from '../quotes.js';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
@@ -20,6 +20,8 @@ let tipState = null;
 try { tipState = localStorage.getItem(GUIDE_TIP_KEY); } catch { /* 忽略 */ }
 const firstVisit = tipState == null;
 const INTENT_SAVE_DELAY = 800; // 今日身分／肯定語：停止輸入多久後自動儲存（毫秒），同每日復盤
+
+let quotesListener = null; // 佳句本改了 → 重算每日一句（20261112）
 
 export function mountOverview(root) {
   root.innerHTML = `
@@ -47,11 +49,6 @@ export function mountOverview(root) {
           <label class="ovi-row"><span class="ovi-k">肯定語</span>
             <input name="affirmation" maxlength="200" placeholder="對自己說一句肯定的話"></label>
         </form>
-        <div class="ovi-main">
-          <h3 class="ovi-k">身分主線任務</h3>
-          <ul class="ovi-steps" id="ov-mainline"></ul>
-          <p class="sub ovi-note" id="ov-mainline-note"></p>
-        </div>
       </div>
     </section>
     <aside class="guide-tip" id="ov-guide-tip" hidden>
@@ -127,20 +124,45 @@ export function mountOverview(root) {
     $('#ov-guide-tip', root).hidden = true;
   };
   // 每日一句：依台北日期選；「換一句」只是當下瀏覽（不存資料），重新整理或過了午夜回到當天那句
+  // 20261112（來自回饋）：和佳句本混合——自己勾「放進每日一句」的佳句大約隔天出現一次（規則在 quotes.js dailyCardOf）
   let quoteDay = null;
-  let quoteIdx = 0;
-  function showQuote() {
-    const q = QUOTES[quoteIdx];
-    $('#ov-quote-text', root).textContent = q.text;
-    $('#ov-quote-cite', root).textContent = `— ${quoteCite(q)}${q.tr ? `｜${q.tr}` : ''}`;
-    $('#ov-quote-zh', root).textContent = q.zh;
+  let card = null;
+  let myQuotes = [];
+  let mediaTitles = {};
+  const mediaTitleOf = (id) => mediaTitles[id] || '';
+  async function loadMyQuotes() {
+    try {
+      const [qs, ms] = await Promise.all([data.listQuotes(), data.listMedia()]);
+      myQuotes = qs;
+      mediaTitles = Object.fromEntries(ms.map((m) => [m.id, m.title]));
+    } catch { myQuotes = []; } // 還沒執行 migration 或讀取失敗：只用內建句子
   }
+  function showQuote() {
+    const t = $('#ov-quote-text', root);
+    t.textContent = card.text;
+    if (card.lang) t.setAttribute('lang', card.lang); else t.removeAttribute('lang');
+    t.classList.toggle('ovq-mine', card.mine);
+    $('#ov-quote-cite', root).textContent = card.cite ? `— ${card.cite}${card.tr ? `｜${card.tr}` : ''}` : '';
+    $('#ov-quote-zh', root).textContent = card.zh;
+    $('#ov-quote-label', root).textContent = card.mine ? '每日一句・我的佳句本' : '每日一句';
+  }
+  async function showDaily(day) {
+    await loadMyQuotes();
+    if (quoteDay !== day) return; // 讀取途中換日了，交給下一次
+    card = dailyCardOf(day, myQuotes, mediaTitleOf);
+    showQuote();
+  }
+  if (quotesListener) window.removeEventListener('lifeos:quotes-changed', quotesListener); // 每次進總覽重新掛，不重複累積
+  quotesListener = () => { if (root.isConnected && quoteDay) showDaily(quoteDay); };
+  window.addEventListener('lifeos:quotes-changed', quotesListener);
   $('#ov-quote-next', root).onclick = () => {
-    quoteIdx = (quoteIdx + 1 + Math.floor(Math.random() * (QUOTES.length - 1))) % QUOTES.length;
+    const pool = cardPool(myQuotes, mediaTitleOf);
+    const others = pool.filter((c) => c.text !== card?.text);
+    card = others[Math.floor(Math.random() * others.length)] || card;
     showQuote();
   };
   $('#ov-quote-copy', root).onclick = async () => {
-    const text = quoteText(QUOTES[quoteIdx]);
+    const text = cardText(card);
     try {
       await navigator.clipboard.writeText(text);
       toast('已複製這一句');
@@ -233,53 +255,7 @@ export function mountOverview(root) {
     }
     renderHint();
   }
-  // 身分主線任務：勾選＝和專案卡片同一套（任務 → setTaskDone；手寫的下一步 → 清空），下一件自動遞補
-  const mainUl = $('#ov-mainline', root);
-  mainUl.addEventListener('change', async (e) => {
-    const box = e.target.closest('.ovi-done');
-    if (!box) return;
-    const p = state.projects.find((x) => x.id === box.dataset.project);
-    if (!p) return;
-    box.disabled = true;
-    try {
-      if (box.dataset.task) {
-        await data.setTaskDone(box.dataset.task, true, state.running);
-        await refreshTasks();
-      } else {
-        await data.saveProject({ ...p, next_action: '' });
-        await refreshProjects();
-      }
-      const next = data.nextStepOf(state.projects.find((x) => x.id === p.id) || p, state.tasks);
-      toast(next ? `完成！下一步：${next.kind === 'task' ? next.task.title : next.text}` : '下一步完成了！這個專案沒有待辦了');
-    } catch (err) {
-      box.checked = false;
-      box.disabled = false;
-      toast(err.message, true);
-    }
-  });
-  mainUl.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-edit-task]');
-    const t = b && state.tasks.find((x) => x.id === b.dataset.editTask);
-    if (t) openTaskEditor(t);
-  });
-  function renderMainline() {
-    const m = data.mainlineSteps(state);
-    mainUl.innerHTML = m.items.length ? m.items.map(({ project: p, goals, step }) => {
-      const meta = `${areaChip(state.areasById[p.area_id])}<span>${esc(p.name)}</span>${goals.map((g) => `<span class="ovi-goal">◆ ${esc(g.title)}</span>`).join('')}`;
-      if (!step) return `<li class="ovi-step empty"><span class="sub">這個專案還沒有下一步，<a href="#/projects">到專案與目標新增</a>。</span><div class="task-meta">${meta}</div></li>`;
-      const title = step.kind === 'task' ? step.task.title : step.text;
-      return `<li class="ovi-step">
-        <input type="checkbox" class="ovi-done" data-project="${p.id}" ${step.kind === 'task' ? `data-task="${step.task.id}"` : ''} aria-label="完成：${esc(title)}">
-        <div class="ovi-body">${step.kind === 'task'
-          ? `<button type="button" class="ovi-title" data-edit-task="${step.task.id}" title="編輯任務">${esc(title)}</button>`
-          : `<a class="ovi-title" href="#/projects" title="專案的手寫下一步（到專案與目標編輯）">${esc(title)}</a>`}
-          <div class="task-meta">${meta}</div></div></li>`;
-    }).join('') : `<li class="empty">${m.mode === 'mainline' ? '主線目標還沒有掛到進行中的專案。' : '還沒有進行中的生活專案。'}</li>`;
-    const notes = [];
-    if (m.mode === 'fallback') notes.push('還沒有勾選身分主線，先列生活專案的下一步；可到<a href="#/year">年度手帳</a>把目標勾成主線。');
-    if (m.unlinked.length) notes.push(`主線目標 ${m.unlinked.map((g) => `「${esc(g.title)}」`).join('')}還沒有掛專案，<a href="#/projects">到專案與目標指定</a>後就會列出它的下一步。`);
-    $('#ov-mainline-note', root).innerHTML = notes.join('<br>');
-  }
+  // 20261113（回饋 8362c3df）：總覽不再放「身分主線任務」；主線仍在年度手帳、專案卡片的「★主線」標記
 
   // ===== 昨天沒做完（20261111 B3）：已過期的生活任務；動作用月度遷移同一套函式（data.migrateTasks），只改任務本身 =====
   const OVERDUE_SHOW = 5;
@@ -405,9 +381,8 @@ export function mountOverview(root) {
 
   return function render() {
     const day = today();
-    if (quoteDay !== day) { quoteDay = day; quoteIdx = quoteIndexOf(day); showQuote(); }
+    if (quoteDay !== day) { quoteDay = day; card = dailyCardOf(day, myQuotes, mediaTitleOf); showQuote(); showDaily(day); }
     if (intentDay !== day && intentLoading !== day) { intentLoading = day; loadIntent(day).finally(() => { intentLoading = null; }); }
-    renderMainline();
     renderOverdue(day);
     $('#ov-guide-tip', root).hidden = tipState === 'dismissed' || !(firstVisit || state.tasks.length === 0);
     // 生活的總覽：不含工作看板的工作（工作只留在工作看板）
