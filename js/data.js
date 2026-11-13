@@ -3023,3 +3023,30 @@ export function filterQuotes(quotes, { q = '', mediaId = '' } = {}, mediaById = 
   });
 }
 
+// ===== 工作看板欄內排序 20261113（回饋 a2fb4008：拖移排序沒反應）=====
+/**
+ * 同一欄調順序：只改這一欄的卡片。把這幾張卡原本的 sort_order 由小到大重新分配給新順序（等於在它們之間換位置），
+ * 其他任務的順序完全不動、也不用寫入；原本沒有 sort_order 的，從這欄最大值往後接。回傳要寫的 [{id, sort_order}]。
+ * （原本用 moveTask＋reorderTasks 會重寫全部未完成任務，200 多筆時要好幾秒，卡片放開後彈回原位，看起來像沒作用）
+ */
+export function columnOrderPatch(orderedIds, tasksById) {
+  const have = orderedIds.map((id) => tasksById[id]?.sort_order).filter((v) => v != null).sort((a, b) => a - b);
+  const unique = new Set(have).size === have.length;
+  let slots;
+  if (have.length === orderedIds.length && unique) slots = have;
+  else {
+    const start = have.length ? have[0] : 1000;
+    slots = orderedIds.map((_, i) => start + i * 10);
+  }
+  return orderedIds.map((id, i) => ({ id, sort_order: slots[i] })).filter(({ id, sort_order }) => tasksById[id]?.sort_order !== sort_order);
+}
+
+export async function reorderColumn(orderedIds, tasksById) {
+  const changed = columnOrderPatch(orderedIds, tasksById);
+  const results = await Promise.all(changed.map(({ id, sort_order }) =>
+    supabase.from('tasks').update({ sort_order }).eq('id', id).select('id')));
+  const updated = results.reduce((n, r) => n + must(r).length, 0);
+  if (updated !== changed.length) throw new Error(`排序預期更新 ${changed.length} 筆，實際 ${updated} 筆`);
+  return updated;
+}
+

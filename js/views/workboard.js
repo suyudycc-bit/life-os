@@ -231,15 +231,23 @@ export function mountWorkBoard(root) {
     else if (reorder) await reorderCard(card.dataset.id, reorder.nextId, reorder.prevId);
   };
 
-  // 同一欄調順序：和任務管理同一套（data.moveTask 算全部未完成任務的新順序 → data.reorderTasks 只寫有變的 sort_order）
+  // 同一欄調順序（20261113 回饋 a2fb4008 修正）：放開就先在畫面上換位置，再只寫這一欄的 sort_order（data.reorderColumn）
   async function reorderCard(id, nextId, prevId) {
-    const order = data.moveTask(state.tasks, id, nextId, prevId);
-    const before = data.moveTask(state.tasks, id, null, null).join() === order.join();
+    const card = body.querySelector(`.wb-card[data-id="${id}"]`);
+    const col = card?.closest('.wb-col');
+    if (!card || !col) return;
+    const next = nextId && col.querySelector(`.wb-card[data-id="${nextId}"]`);
+    const prev = prevId && col.querySelector(`.wb-card[data-id="${prevId}"]`);
+    if (next) next.before(card); else if (prev) prev.after(card); else return;
+    const ids = [...col.querySelectorAll('.wb-card')].map((c) => c.dataset.id);
     try {
-      await data.reorderTasks(order, Object.fromEntries(state.tasks.map((t) => [t.id, t])));
+      const n = await data.reorderColumn(ids, Object.fromEntries(state.tasks.map((t) => [t.id, t])));
       await refreshTasks();
-      if (!before) toast('已調整順序');
-    } catch (err) { toast(err.message, true); }
+      if (n) toast('已調整順序');
+    } catch (err) {
+      toast(err.message, true);
+      await refreshTasks(); // 寫入失敗：重畫回資料庫裡的順序
+    }
   }
   body.addEventListener('pointerup', endDrag);
   body.addEventListener('pointercancel', endDrag);
@@ -300,7 +308,18 @@ export function mountWorkBoard(root) {
   // 手機（卡片不能拖，避免擋住左右滑動）：用「移到…」選單換欄
   body.addEventListener('change', async (e) => {
     if (!e.target.matches('.wb-move') || !e.target.value) return;
-    await moveTo(e.target.closest('.wb-card').dataset.id, e.target.value);
+    const card = e.target.closest('.wb-card');
+    if (e.target.value === 'up' || e.target.value === 'down') { // 20261113：手機也能調順序
+      const up = e.target.value === 'up';
+      e.target.value = '';
+      const cards = [...card.closest('.wb-col').querySelectorAll('.wb-card')];
+      const other = cards[cards.indexOf(card) + (up ? -1 : 1)];
+      if (!other) return;
+      if (up) await reorderCard(card.dataset.id, other.dataset.id, null); // 放到上一張前面
+      else await reorderCard(card.dataset.id, null, other.dataset.id);   // 放到下一張後面
+      return;
+    }
+    await moveTo(card.dataset.id, e.target.value);
   });
 
   // 鍵盤也能換欄：卡片聚焦時按左右鍵
@@ -434,6 +453,7 @@ export function mountWorkBoard(root) {
         </div>
         <select class="wb-move" aria-label="移到其他欄">
           <option value="">移到…</option>
+          ${col !== 'done' ? '<option value="up">↑ 往上移</option><option value="down">↓ 往下移</option>' : ''}
           ${data.BOARD_COLUMNS.filter((c) => c.id !== col).map((c) => `<option value="${c.id}">${c.label}</option>`).join('')}
         </select>
       </article>`;
