@@ -371,6 +371,34 @@ document.addEventListener('keydown', (e) => {
   if (e.target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
   setSidebarCollapsed(!$('#app').classList.contains('sb-collapsed'));
 });
+// ===== 有新版本時提示更新（20261114：Life OS 是單頁網站，分頁一直開著就不會載入新程式，發佈後看不到新功能）=====
+// 發佈時 build-site.sh 會在 index.html 的 app.js 加 ?v=時間戳；回到這個分頁或每 30 分鐘，重新讀一次 index.html（不用快取）比對，
+// 不一樣就在畫面下方顯示「有新版本」，按了重新整理。本機開發（沒有 ?v=）不檢查。
+{
+  const mine = /[?&]v=(\w+)/.exec(document.querySelector('script[src*="js/app.js"]')?.src || '')?.[1];
+  let shown = false;
+  let lastCheck = 0;
+  const check = async () => {
+    if (!mine || shown || document.hidden || Date.now() - lastCheck < 60000) return;
+    lastCheck = Date.now();
+    try {
+      const html = await (await fetch(`${location.pathname}?_=${Date.now()}`, { cache: 'no-store' })).text();
+      const latest = /js\/app\.js\?v=(\w+)/.exec(html)?.[1];
+      if (!latest || latest === mine) return;
+      shown = true;
+      const bar = document.createElement('div');
+      bar.className = 'update-bar';
+      bar.setAttribute('role', 'status');
+      bar.innerHTML = '<span>Life OS 有新版本</span><button type="button" class="btn-primary">更新</button>';
+      bar.querySelector('button').onclick = () => location.reload();
+      document.body.append(bar);
+    } catch { /* 離線或讀不到就下次再試 */ }
+  };
+  document.addEventListener('visibilitychange', check);
+  window.addEventListener('focus', check);
+  setInterval(check, 30 * 60 * 1000);
+}
+
 initAccount();
 $('#feedback-btn').onclick = () => openFeedbackDialog(); // 20261111（D）：任何頁面都能寫回饋，自動帶上目前頁面
 

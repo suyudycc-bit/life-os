@@ -2115,6 +2115,11 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .tl-row label[hidden] { display: none; }
 @container main (max-width: 560px) { .tl-row { grid-template-columns: minmax(0, 1fr); } .tl-meta, .tl-desc, .tl-foot { margin-left: 0; } }
 
+/* ===== 有新版本提示 20261114 ===== */
+.update-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 12px;
+  background: var(--ink); color: #fff; padding: 8px 10px 8px 16px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
+.update-bar .btn-primary { background: #fff; color: var(--ink); }
+
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
    原則：短（≤260ms）、只動 opacity／transform、拖移中與完成動畫中的元素不套用。 */
