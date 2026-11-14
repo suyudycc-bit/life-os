@@ -2125,6 +2125,15 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .qb-ocr select { width: auto; }
 .qb-ocr .sub { font-size: 13px; }
 
+/* ===== 年度手帳：已過的季收起、Future Log 已完成可隱藏 20261114 ===== */
+.yr-quarters { align-items: start; }
+.yr-q.is-past:not(.is-open) > :not(.yr-q-head) { display: none; }
+.yr-q.is-past:not(.is-open) { opacity: .8; }
+.yr-q.is-past:not(.is-open) .yr-q-head { margin-bottom: 0; }
+.yr-q-toggle { margin-left: auto; font-size: 13px; padding: 1px 8px; }
+.yr-fl-head { flex-wrap: wrap; gap: 4px 12px; }
+.yr-fl-done { margin-left: auto; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
+
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
    原則：短（≤260ms）、只動 opacity／transform、拖移中與完成動畫中的元素不套用。 */

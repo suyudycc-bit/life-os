@@ -23,7 +23,9 @@ const SCALES = {
   energy: { label: '能量', levels: data.ENERGY_LEVELS },
 };
 
-const ui = { year: Number(today().slice(0, 4)), by: 'mood' };
+const ui = { year: Number(today().slice(0, 4)), by: 'mood', openQ: new Set() }; // openQ：展開的「已過」季（20261114）
+const FL_DONE_KEY = 'lifeos-year-fl-done'; // Future Log 是否顯示已完成的任務（只存在這台裝置）
+try { ui.flDone = localStorage.getItem(FL_DONE_KEY) === '1'; } catch { ui.flDone = false; }
 const pad = (n) => String(n).padStart(2, '0');
 const lastDay = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate();
 const weekday = (day) => WEEKDAYS[new Date(`${day}T12:00:00+08:00`).getUTCDay()];
@@ -138,9 +140,13 @@ export function mountYear(root) {
         ${[1, 2, 3, 4].map((q) => {
           const p = `${y}-Q${q}`;
           const now = p === nowQ;
-          return `<section class="card yr-q ${now ? 'is-now' : ''}" aria-label="第 ${q} 季">
+          // 20261114：已經過去的季預設收起，只留標題與達成數，按「展開」再看（以前的年份四季都算已過）
+          const past = y < Number(t.slice(0, 4)) || (nowQ && p < nowQ);
+          const open = !past || ui.openQ.has(p);
+          return `<section class="card yr-q ${now ? 'is-now' : ''} ${past ? 'is-past' : ''} ${open ? 'is-open' : ''}" aria-label="第 ${q} 季" data-q="${p}">
             <div class="yr-q-head"><h2>Q${q}<small>${q * 3 - 2}–${q * 3} 月</small></h2>
-              ${now ? '<span class="yr-now">本季</span>' : ''}<span class="sub" data-count="${p}"></span></div>
+              ${now ? '<span class="yr-now">本季</span>' : ''}<span class="sub" data-count="${p}"></span>
+              ${past ? `<button type="button" class="btn-ghost yr-q-toggle" data-q-toggle="${p}" aria-expanded="${open}">${open ? '收起' : '展開'}</button>` : ''}</div>
             <ul class="yr-goals" data-goals="${p}"></ul>
             ${addForm(p)}
             <details class="yr-review" ${now ? 'open' : ''}>
@@ -152,7 +158,8 @@ export function mountYear(root) {
       </div>
 
       <section class="card">
-        <div class="day-head"><h2>Future Log</h2><span class="sub">◆ 目標期限・★ 星號任務（點了可以編輯）</span></div>
+        <div class="day-head yr-fl-head"><h2>Future Log</h2><span class="sub">◆ 目標期限・★ 星號任務（點了可以編輯）</span>
+          <label class="check yr-fl-done"><input type="checkbox" id="yr-fl-done" ${ui.flDone ? 'checked' : ''}> 顯示已完成的任務<span class="sub" id="yr-fl-done-n"></span></label></div>
         <div class="yr-future">
           ${Array.from({ length: 12 }, (_, i) => {
             const m = `${y}-${pad(i + 1)}`;
@@ -328,14 +335,20 @@ export function mountYear(root) {
         : `<li class="empty">${p.includes('Q') ? '這一季還沒有目標。' : '還沒有年度目標。寫下今年最想達成的一兩件事。'}</li>`;
       const active = goals.filter((g) => g.status !== 'dropped');
       const cnt = root.querySelector(`[data-count="${p}"]`);
-      if (cnt) cnt.textContent = active.length ? `達成 ${active.filter((g) => g.status === 'done').length}／${active.length}` : '';
+      if (cnt) cnt.textContent = active.length ? `達成 ${active.filter((g) => g.status === 'done').length}／${active.length}`
+        : (cnt.closest('.is-past') ? '沒有目標' : '');
     });
   }
 
   function renderFuture() {
     // 生活頁面：星號任務只讀生活那一份；目標不分工作與生活（同專案與目標頁）
     const months = data.futureLogMonths(ui.year, cache.events, state.goals, state.life.tasks);
+    // 20261114：已完成的星號任務預設不顯示，才看得到還沒做的與目標期限（亮點）；勾「顯示已完成的任務」再出現
+    const doneN = months.reduce((n, m) => n + m.starred.filter((t) => t.status === 'done').length, 0);
+    const nEl = root.querySelector('#yr-fl-done-n');
+    if (nEl) nEl.textContent = doneN ? `（${doneN} 件）` : '';
     for (const m of months) {
+      if (!ui.flDone) m.starred = m.starred.filter((t) => t.status !== 'done');
       const ul = root.querySelector(`[data-month-list="${m.month}"]`);
       if (!ul) continue;
       const items = [
@@ -438,6 +451,12 @@ export function mountYear(root) {
   });
 
   body.addEventListener('change', async (e) => {
+    if (e.target.id === 'yr-fl-done') { // Future Log 顯示／隱藏已完成的任務
+      ui.flDone = e.target.checked;
+      try { localStorage.setItem(FL_DONE_KEY, ui.flDone ? '1' : '0'); } catch { /* 忽略 */ }
+      renderFuture();
+      return;
+    }
     if (e.target.id === 'yr-ml-pick') {
       const sel = e.target;
       const g = state.goals.find((x) => x.id === sel.value);
@@ -474,6 +493,17 @@ export function mountYear(root) {
   });
 
   body.addEventListener('click', async (e) => {
+    const qt = e.target.closest('[data-q-toggle]');
+    if (qt) { // 已過的季：展開／收起（只是畫面，不存）
+      const p = qt.dataset.qToggle;
+      const card = qt.closest('.yr-q');
+      const open = !card.classList.contains('is-open');
+      card.classList.toggle('is-open', open);
+      if (open) ui.openQ.add(p); else ui.openQ.delete(p);
+      qt.textContent = open ? '收起' : '展開';
+      qt.setAttribute('aria-expanded', String(open));
+      return;
+    }
     const by = e.target.closest('[data-by]');
     if (by) {
       ui.by = by.dataset.by;
