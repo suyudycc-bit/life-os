@@ -4,6 +4,7 @@
 import * as data from '../data.js';
 import { $, esc, toast, confirmDialog } from '../ui.js';
 import { formatShort, localDate } from '../dates.js';
+import { OCR_LANGS } from '../ocr.js';
 
 const MEDIA_KIND = { book: '書', movie: '電影', tv: '影集', podcast: 'Podcast', course: '課程' };
 
@@ -19,6 +20,12 @@ export function mountQuotes(root) {
     <section class="card qb-page">
       <form id="qb-add" class="qb-form">
         <label>佳句<textarea name="body" rows="3" maxlength="${data.QUOTE_MAX}" required aria-label="佳句"></textarea></label>
+        <div class="qb-ocr">
+          <button type="button" class="btn-ghost" id="qb-ocr-btn">📷 從照片擷取文字</button>
+          <select id="qb-ocr-lang" aria-label="照片上的文字">${Object.entries(OCR_LANGS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+          <input type="file" id="qb-ocr-file" accept="image/*" hidden>
+          <span class="sub" id="qb-ocr-status" role="status"></span>
+        </div>
         <div class="qb-row">
           <label>誰說的<input name="author" maxlength="120" autocomplete="off"></label>
           <label>出處<input name="source" maxlength="200" autocomplete="off" placeholder="書名、章節、影片…"></label>
@@ -51,6 +58,7 @@ export function mountQuotes(root) {
         media_id: f.get('media_id'), in_daily: form.in_daily.checked });
       const keepMedia = form.media_id.value;
       form.reset();
+      ocrStatus.textContent = '';
       form.media_id.value = keepMedia; // 連續記同一本書的佳句時不用重選
       form.in_daily.checked = true;
       form.body.focus();
@@ -58,6 +66,34 @@ export function mountQuotes(root) {
       toast('已記進佳句本');
     } catch (err) { toast(err.message, true); }
   });
+  // 從照片擷取文字（20261114 回饋 cfd1ead8）：在瀏覽器裡辨識，照片不上傳；結果放進佳句欄（已有文字就接在後面），可以再修改
+  const ocrBtn = $('#qb-ocr-btn', root);
+  const ocrFile = $('#qb-ocr-file', root);
+  const ocrStatus = $('#qb-ocr-status', root);
+  ocrBtn.addEventListener('click', () => ocrFile.click());
+  ocrFile.addEventListener('change', async () => {
+    const file = ocrFile.files[0];
+    ocrFile.value = '';
+    if (!file) return;
+    ocrBtn.disabled = true;
+    try {
+      const { recognizeImage } = await import('../ocr.js');
+      const text = await recognizeImage(file, $('#qb-ocr-lang', root).value, (p, label) => {
+        ocrStatus.textContent = `${label}… ${Math.round(p * 100)}%`;
+      });
+      if (!text) { ocrStatus.textContent = '照片裡沒有認出文字，換一張清楚一點、正面拍的試試'; return; }
+      const cur = form.body.value.trim();
+      form.body.value = (cur ? `${cur}\n` : '') + text.slice(0, data.QUOTE_MAX - (cur ? cur.length + 1 : 0));
+      form.body.focus();
+      ocrStatus.textContent = '已帶入，請檢查一下有沒有認錯的字';
+    } catch (err) {
+      ocrStatus.textContent = '';
+      toast(err.message, true);
+    } finally {
+      ocrBtn.disabled = false;
+    }
+  });
+
   // 選了書影單、出處還空著 → 帶入書名（可再改）
   form.media_id.addEventListener('change', () => {
     const m = mediaById()[form.media_id.value];

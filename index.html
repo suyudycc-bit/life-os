@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- 資安 20261111（C）：GitHub Pages 不能設回應標頭，所以用 meta CSP。各來源的理由見 docs/09-publish.md「CSP」；
        改這行時 scripts/build-site.sh 會檢查它還在。frame-ancestors 在 meta 無效，防嵌入由 js/frame-guard.js 處理 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org https://itunes.apple.com; frame-src https://script.google.com https://*.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>Life OS</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org https://itunes.apple.com https://cdn.jsdelivr.net; frame-src https://script.google.com https://*.googleusercontent.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>Why Am I Here?</title>
   <meta name="theme-color" content="#173b34">
   <!-- 網站圖示：相對路徑（GitHub Pages 在 /life-os/ 子路徑下）；PNG 由 favicon.svg 以 macOS qlmanage／sips 轉出 -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=202611132336">
+  <link rel="stylesheet" href="css/style.css?v=202611142147">
 </head>
 <body>
   <!--
@@ -32,7 +32,7 @@
     <aside class="sidebar">
       <div class="brand">
         <button class="menu-btn btn-ghost" id="menu-btn" aria-label="開啟選單">☰</button>
-        <span>Life OS</span>
+        <span>Why Am I Here?</span>
         <span class="mock-flag" id="mock-flag" hidden>模擬</span>
         <button class="collapse-btn btn-ghost" id="collapse-btn" aria-label="收合側欄" aria-expanded="true" title="收合側欄（快捷鍵 [ ）">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM9 5v14"/><path d="m15.5 10-2 2 2 2"/></svg>
@@ -75,6 +75,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=202611132336"></script>
+  <script type="module" src="js/app.js?v=202611142147"></script>
 </body>
 </html>

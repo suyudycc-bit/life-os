@@ -54,7 +54,7 @@ export async function openGoogleSyncDialog(onSynced) {
       <p class="sub">每小時自動同步一次；也可以按下方「立即同步」。${isMock ? '<br><b>模擬模式</b>：不會連到 Google，「立即同步」會放幾筆範例會議讓你看畫面。' : ''}</p>
 
       <section>
-        <h3>① 把 Google 會議帶進 Life OS（唯讀）</h3>
+        <h3>① 把 Google 會議帶進來（唯讀）</h3>
         <p class="sub">到 Google 日曆 → 左側你的日曆旁「⋮」→ 設定和共用 → 整合日曆 → 複製「iCal 格式的私密網址」，貼在下面。
           這個網址等於日曆的鑰匙，不要給別人；外洩時可在同一處按「重設」。</p>
         ${s.google_ics_url ? `<p class="gs-ics-saved" data-ics-saved>已設定：<code title="完整網址不顯示在畫面上">${esc(data.maskIcsUrl(s.google_ics_url))}</code>
@@ -71,9 +71,9 @@ export async function openGoogleSyncDialog(onSynced) {
       </section>
 
       <section>
-        <h3>② 把 Life OS 任務寫進 Google</h3>
+        <h3>② 把任務寫進 Google</h3>
         <p class="sub">會在你的 Google 日曆新增一個「Life OS」日曆，只寫在那裡，不會動到你原本的行程。
-          有排程時間的任務顯示在那個時段；只有到期日的任務顯示為全天的「到期」。請在 Life OS 修改，在 Google 改的會被覆蓋。</p>
+          有排程時間的任務顯示在那個時段；只有到期日的任務顯示為全天的「到期」。請在這裡修改，在 Google 改的會被覆蓋。</p>
         ${s.push_enabled
           ? `<p>✓ 已連結 Google 帳號</p>
              ${statusLine(s.last_push_at, s.last_push_count, s.last_push_error, '個任務事件')}

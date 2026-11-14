@@ -8,7 +8,7 @@ if (framed) {
   document.body.innerHTML = '';
   const p = document.createElement('p');
   p.className = 'frame-notice';
-  p.textContent = 'Life OS 不能嵌在其他網頁裡使用，請直接在瀏覽器分頁開啟。';
+  p.textContent = 'Why Am I Here? 不能嵌在其他網頁裡使用，請直接在瀏覽器分頁開啟。';
   document.body.appendChild(p);
   await new Promise(() => {});
 }

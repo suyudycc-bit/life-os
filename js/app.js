@@ -238,7 +238,7 @@ function showAuth(message = '') {
   if (!supabase) {
     box.innerHTML = `
       <div class="card auth-card">
-        <h1>Life OS</h1>
+        <h1>Why Am I Here?</h1>
         <p>尚未設定 Supabase。請把 <code>src/js/config.example.js</code> 複製成 <code>config.js</code> 並填入專案網址與 anon key。</p>
         ${isLocalDevHost(location.hostname) ? '<p class="sub">只想先看介面：網址加上 <code>?mock=1</code> 使用本機模擬資料（不會同步；只在本機開發時有效）。</p>' : ''}
       </div>`;
@@ -246,7 +246,7 @@ function showAuth(message = '') {
   }
   box.innerHTML = `
     <form class="card auth-card" id="auth-form">
-      <h1>Life OS</h1>
+      <h1>Why Am I Here?</h1>
       <p class="sub">登入後，手機與電腦會看到同一份資料。</p>
       ${isMock ? '<p class="warn">本機模擬模式：資料只存在這個瀏覽器。示範帳號 demo@lifeos.local／demo1234</p>' : ''}
       <label>Email<input type="email" name="email" required autocomplete="email"></label>
@@ -389,7 +389,7 @@ document.addEventListener('keydown', (e) => {
       const bar = document.createElement('div');
       bar.className = 'update-bar';
       bar.setAttribute('role', 'status');
-      bar.innerHTML = '<span>Life OS 有新版本</span><button type="button" class="btn-primary">更新</button>';
+      bar.innerHTML = '<span>Why Am I Here? 有新版本</span><button type="button" class="btn-primary">更新</button>';
       bar.querySelector('button').onclick = () => location.reload();
       document.body.append(bar);
     } catch { /* 離線或讀不到就下次再試 */ }

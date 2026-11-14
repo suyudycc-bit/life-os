@@ -971,7 +971,7 @@ const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_m
  * - 同一天的復盤、同一習慣同一天的打卡已存在、進行中的計時 → 略過
  */
 export async function planImport(backup) {
-  if (backup?.app !== 'life-os' || !backup.tables) throw new Error('這不是 Life OS 的備份檔');
+  if (backup?.app !== 'life-os' || !backup.tables) throw new Error('這不是 Why Am I Here?（Life OS）的備份檔');
   const current = {};
   for (const t of BACKUP_TABLES) current[t] = await fetchAll(t);
   const has = Object.fromEntries(BACKUP_TABLES.map((t) => [t, new Set(current[t].map((r) => r.id))]));

@@ -90,7 +90,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   box-shadow: inset -8px 0 14px -10px rgba(0, 0, 0, .55);
 }
 .brand { display: flex; align-items: center; gap: 8px; padding: 0 16px 0 10px; }
-.brand > span:first-of-type { font-family: var(--f-hand); font-weight: 700; font-size: 24px; letter-spacing: .04em; }
+.brand > span:first-of-type { font-family: var(--f-hand); font-weight: 700; font-size: 18px; letter-spacing: .01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } /* 20261114 名稱改成 Why Am I Here?，比原本長：縮小、不換行 */
 .menu-btn { display: none; color: var(--cover-ink); }
 .menu-btn:hover { background: rgba(255, 255, 255, .1); color: #fff; }
 .mock-flag { font-size: 11px; background: #fdecc8; color: #7a4f00; padding: 1px 6px; border-radius: 3px; }
@@ -279,7 +279,7 @@ dialog p { margin: 0; }
 @media (max-width: 760px) {
   #app { grid-template-columns: minmax(0, 1fr); }
   .sidebar { height: auto; position: sticky; top: 0; z-index: 5; padding: 8px 12px; gap: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, .25); }
-  .brand > span:first-of-type { font-size: 20px; }
+  .brand > span:first-of-type { font-size: 18px; }
   #nav a { border-radius: 4px; }
   #nav a[aria-current]::after { display: none; }
   .menu-btn { display: inline-block; }
@@ -2119,6 +2119,11 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .update-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 12px;
   background: var(--ink); color: #fff; padding: 8px 10px 8px 16px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
 .update-bar .btn-primary { background: #fff; color: var(--ink); }
+
+/* ===== 佳句照片擷取文字 20261114（回饋 cfd1ead8）===== */
+.qb-ocr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -2px; }
+.qb-ocr select { width: auto; }
+.qb-ocr .sub { font-size: 13px; }
 
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
