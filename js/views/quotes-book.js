@@ -78,14 +78,17 @@ export function mountQuotes(root) {
     ocrBtn.disabled = true;
     try {
       const { recognizeImage } = await import('../ocr.js');
-      const text = await recognizeImage(file, $('#qb-ocr-lang', root).value, (p, label) => {
+      const { text, confidence, lang } = await recognizeImage(file, $('#qb-ocr-lang', root).value, (p, label) => {
         ocrStatus.textContent = `${label}… ${Math.round(p * 100)}%`;
       });
       if (!text) { ocrStatus.textContent = '照片裡沒有認出文字，換一張清楚一點、正面拍的試試'; return; }
       const cur = form.body.value.trim();
       form.body.value = (cur ? `${cur}\n` : '') + text.slice(0, data.QUOTE_MAX - (cur ? cur.length + 1 : 0));
       form.body.focus();
-      ocrStatus.textContent = '已帶入，請檢查一下有沒有認錯的字';
+      const how = { chi_tra: '橫排', chi_tra_vert: '直排', eng: '英文' }[lang] || '';
+      ocrStatus.textContent = confidence < 60
+        ? `已帶入（${how}，辨識信心 ${confidence}%，偏低）：可能有不少錯字。試試只拍要的那幾行、拍正、光線均勻，或改選橫排／直排`
+        : `已帶入（${how}，辨識信心 ${confidence}%），請檢查一下有沒有認錯的字`;
     } catch (err) {
       ocrStatus.textContent = '';
       toast(err.message, true);
