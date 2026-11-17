@@ -121,7 +121,7 @@ export function openMediaDialog(item = null, { preset = {}, hint = '', onSaved =
       </div>
       <p class="sub md-search-note" id="md-search-note"></p>
       <div class="md-results" id="md-results" aria-live="polite"></div>
-      <label>連結<input name="link_url" type="url" placeholder="書店、片單、節目頁…" value="${esc(m.link_url || '')}"></label>
+      <label>連結<input name="link_url" placeholder="書店、片單、節目頁…（可直接貼博客來、誠品的網址或分享文字）" value="${esc(m.link_url || '')}"></label>
       <fieldset class="md-rate">
         <legend>評分</legend>
         ${[1, 2, 3, 4, 5].map((n) => `<label title="${n} 星"><input type="radio" name="rating" value="${n}" ${Number(m.rating) === n ? 'checked' : ''}><span aria-hidden="true">★</span><span class="sr">${n} 星</span></label>`).join('')}
@@ -193,6 +193,26 @@ export function openMediaDialog(item = null, { preset = {}, hint = '', onSaved =
     if (e.target.name === 'kind') { ctrl?.abort(); renderPreview(); results.innerHTML = ''; renderSearchState(true); }
     if (e.target.name === 'status') renderToNote();
   });
+  // 20261117（回饋 6763067d）：在名稱或連結欄貼上書店網址／分享文字 → 網址放連結、拆出書名，書名有了就自動找作者與封面
+  const onPasteShare = (e) => {
+    const text = e.clipboardData?.getData('text') || '';
+    if (!/https?:\/\//.test(text)) return;
+    e.preventDefault();
+    const { url, store, title } = data.bookFromShare(text);
+    if (url) form.link_url.value = url;
+    if (store && !item) form.kind.value = 'book';
+    if (title && !form.title.value.trim()) form.title.value = title;
+    renderPreview();
+    if (form.title.value.trim() && canSearchCover(form.kind.value)) searchBtn.click();
+    else {
+      note.textContent = store
+        ? `${store}的網頁不讓程式讀取內容，請在「名稱」輸入書名，按 Enter 就會找作者和封面。`
+        : '已放進連結；請輸入名稱，按 Enter 找封面。';
+      form.title.focus();
+    }
+  };
+  form.title.addEventListener('paste', onPasteShare);
+  form.link_url.addEventListener('paste', onPasteShare);
   form.title.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); if (canSearchCover(form.kind.value)) searchBtn.click(); }
   });

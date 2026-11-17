@@ -27,9 +27,11 @@ import { mountFeedback, openFeedbackDialog } from './views/feedback.js';
 import { mountQuotes } from './views/quotes-book.js';
 import { mountTools } from './views/tools.js';
 import { mountHealth } from './views/health.js';
+import { openRemindDialog, registerServiceWorker } from './views/reminders.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
+import { initTheme } from './theme.js';
 
 // 左側選單 8 項（docs/00）；尚未實作的模組標示預計 Phase
 // 選單圖示：24×24、1.6 筆畫的線條圖（樣式見 .icon）
@@ -403,6 +405,11 @@ document.addEventListener('keydown', (e) => {
 }
 
 initAccount();
+initTheme();
+// 換主題後重畫目前頁面，讓圖表（建立時讀 CSS 顏色）跟著換色
+document.addEventListener('lifeos:theme-changed', () => { if (loadedFor) route(); });
+$('#remind-btn').onclick = () => openRemindDialog(); // 20261117：網站推播提醒
+registerServiceWorker(); // 只處理推播，不快取檔案
 $('#feedback-btn').onclick = () => openFeedbackDialog(); // 20261111（D）：任何頁面都能寫回饋，自動帶上目前頁面
 
 // 預覽版（site/preview/，docs/15）：整頁標上「預覽版」，避免和正式版搞混；登入畫面也看得到

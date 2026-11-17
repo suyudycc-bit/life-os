@@ -18,7 +18,10 @@
   --cover-ink: #eef4ef;
   --cover-sub: #a8c2b8;
   /* 功能色 */
-  --accent: var(--ink);
+  --primary: var(--ink);     /* 主按鈕、選中狀態（20261117 外觀主題：可和標題墨水色分開） */
+  --on-primary: #fff;
+  --tip: var(--ink); --on-tip: #fff; /* toast、新版本提示條 */
+  --accent: var(--primary);
   --danger: #c2392a;         /* 朱紅：今天、超時、刪除 */
   --ok: #2b7d58;
   --link: #2a5bb5;
@@ -62,10 +65,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .5; }
 .btn-primary {
-  background: var(--ink); color: #fff; border: 0; border-radius: 4px; padding: 8px 18px; font-weight: 600;
+  background: var(--primary); color: var(--on-primary); border: 0; border-radius: 4px; padding: 8px 18px; font-weight: 600;
   box-shadow: 0 1px 0 rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .12); transition: background .15s, transform .1s;
 }
-.btn-primary:hover { background: #2a3b63; }
+.btn-primary:hover { background: color-mix(in srgb, var(--primary) 88%, #fff); }
 .btn-primary:active { transform: translateY(1px); }
 .btn-primary.danger { background: var(--danger); }
 .btn-ghost {
@@ -177,7 +180,7 @@ main > * { max-width: 1440px; } /* 20261111 B2：原 1080px，寬螢幕或網頁
 .seg button { border: 0; background: transparent; padding: 6px 13px; color: var(--text-2); white-space: nowrap; }
 .seg button:hover { background: var(--wash); }
 .seg button + button { border-left: 1px solid color-mix(in srgb, var(--ink) 35%, transparent); }
-.seg button[aria-pressed=true] { background: var(--ink); color: #fff; }
+.seg button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); }
 .check { display: inline-flex; gap: 6px; align-items: center; color: var(--sub); font-size: 14px; }
 
 .task-list { list-style: none; margin: 0; padding: 0; }
@@ -270,7 +273,7 @@ dialog p { margin: 0; }
 
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0; z-index: 50;
-  background: var(--ink); color: #fff; padding: 9px 18px; border-radius: 4px; box-shadow: 0 8px 24px rgba(18, 30, 40, .3); transition: .2s; pointer-events: none;
+  background: var(--tip); color: var(--on-tip); padding: 9px 18px; border-radius: 4px; box-shadow: 0 8px 24px rgba(18, 30, 40, .3); transition: .2s; pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); transition: opacity .2s, transform .35s cubic-bezier(.16, 1, .3, 1); }
 .toast.error { background: var(--danger); }
@@ -300,7 +303,7 @@ dialog p { margin: 0; }
   white-space: nowrap;
 }
 .btn-timer:hover { border-color: var(--ink); background: var(--wash); }
-.btn-timer.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.btn-timer.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .clock { font-family: var(--f-num); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 17px; color: var(--ink); letter-spacing: .02em; }
 .task.timing { background: linear-gradient(100deg, transparent 0 .5%, var(--hl) 1.5% 98.5%, transparent 99.5%); border-radius: 3px; }
 .running-bar {
@@ -459,7 +462,7 @@ dialog p { margin: 0; }
   border: 1px solid var(--line); background: var(--paper-hi); border-radius: 3px; padding: 4px 12px; font-size: 13px;
   display: inline-flex; align-items: center; gap: 6px; color: var(--sub);
 }
-.nt-filters button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.nt-filters button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .nt-filters .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
 .nt-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .nt-tags:empty { display: none; }
@@ -535,7 +538,7 @@ dialog p { margin: 0; }
 .btn-memo { position: relative; }
 .btn-memo .count {
   position: absolute; top: -5px; right: -4px; min-width: 16px; height: 16px; line-height: 16px; padding: 0 4px;
-  font-size: 10px; border-radius: 8px; background: var(--accent); color: #fff; text-align: center;
+  font-size: 10px; border-radius: 8px; background: var(--accent); color: var(--on-primary); text-align: center;
 }
 
 /* ===== 專案與目標（Phase 5）===== */
@@ -1222,7 +1225,7 @@ main:has(.wb-board) > * { max-width: none; }
 
 .yr-label { font-family: var(--f-num); font-size: 22px; font-weight: 600; color: var(--ink); min-width: 3em; text-align: center; }
 .yr-now {
-  font-size: 12px; color: #fff; background: var(--ink); border-radius: 2px; padding: 0 6px; line-height: 1.6;
+  font-size: 12px; color: var(--on-primary); background: var(--primary); border-radius: 2px; padding: 0 6px; line-height: 1.6;
   font-family: var(--f-hand); letter-spacing: .06em; transform: rotate(-2deg); display: inline-block;
 }
 /* 目標清單（年度與四季共用） */
@@ -1492,7 +1495,7 @@ dialog label.mood-opt, .mood-pick button {
   transition: background .15s, color .15s, transform .1s var(--ease-press);
 }
 .ib-chips button:active { transform: scale(.96); }
-.ib-chips button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.ib-chips button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .ib-list { list-style: none; margin: 4px 0 0; padding: 0; }
 .ib-list .empty { color: var(--sub); padding: 14px 6px; font-size: 14px; }
 .ib-item {
@@ -1508,7 +1511,7 @@ dialog label.mood-opt, .mood-pick button {
   line-height: 1; transform: rotate(-4deg); background: var(--paper-hi);
 }
 .ib-mark.sm { width: 18px; height: 18px; font-size: 10px; border-width: 1px; transform: none; }
-.ib-chips button[aria-pressed=true] .ib-mark { border-color: #fff; color: #fff; background: transparent; }
+.ib-chips button[aria-pressed=true] .ib-mark { border-color: var(--on-primary); color: var(--on-primary); background: transparent; }
 .ib-src-xiaohongshu, .ib-src-youtube { border-style: dashed; }
 .ib-src-other { border-color: var(--mute); color: var(--sub); }
 .ib-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -1907,7 +1910,7 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
   padding: 4px 11px; font-size: 14px; min-height: 34px; transition: background .15s, color .15s, transform .1s var(--ease-press);
 }
 .rf-chip:active { transform: scale(.96); }
-.rf-chip[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rf-chip[aria-pressed=true] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .rf-want { font-size: 15px; padding: 5px 14px; }
 .rf-chip.sm { min-height: 0; padding: 0 8px; font-size: 12.5px; background: var(--wash); border-color: transparent; }
 .rf-own-add { display: flex; gap: 6px; }
@@ -1930,7 +1933,7 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
   font-family: var(--f-num); font-size: 16px; color: var(--text-2); transition: background .15s, transform .1s var(--ease-press);
 }
 .rf-scale button:active { transform: scale(.94); }
-.rf-scale button[aria-pressed=true] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.rf-scale button[aria-pressed=true] { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .rf-scale-note { margin: -4px 0 0; font-size: 12.5px; }
 .rf-actions { flex-wrap: wrap; position: sticky; bottom: -18px; background: var(--paper-hi); padding: 10px 0 4px; border-top: 1px solid var(--line); }
 .rf-del { margin-right: auto; }
@@ -1980,7 +1983,7 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
   border: 1px solid var(--line); background: var(--paper-hi); border-radius: 999px; padding: 3px 14px;
   font-size: 14px; color: var(--text-2); transition: background .15s, color .15s;
 }
-.fb-kinds button[aria-pressed=true] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.fb-kinds button[aria-pressed=true] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .fb-dialog textarea { resize: vertical; min-height: 110px; }
 .fb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; }
 .fb-head > div { flex: 1 1 260px; min-width: 0; }
@@ -2117,8 +2120,8 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 
 /* ===== 有新版本提示 20261114 ===== */
 .update-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 12px;
-  background: var(--ink); color: #fff; padding: 8px 10px 8px 16px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
-.update-bar .btn-primary { background: #fff; color: var(--ink); }
+  background: var(--tip); color: var(--on-tip); padding: 8px 10px 8px 16px; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
+.update-bar .btn-primary { background: var(--on-tip); color: var(--tip); }
 
 /* ===== 佳句照片擷取文字 20261114（回饋 cfd1ead8）===== */
 .qb-ocr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -2px; }
@@ -2172,6 +2175,15 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .hl-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .hl-slots { border: 1px solid var(--line); border-radius: 3px; padding: 6px 10px; display: flex; gap: 14px; flex-wrap: wrap; }
 .hl-slots legend { font-size: 13.5px; padding: 0 4px; }
+
+/* ===== 提醒設定 20261117（回饋 4c43dd7a）===== */
+.rm-form { display: flex; flex-direction: column; gap: 10px; max-width: 520px; }
+.rm-form h3 { margin: 6px 0 4px; font-size: 15px; }
+.rm-form section + section { border-top: 1px dashed var(--line); padding-top: 8px; }
+.rm-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.rm-row input[type=time] { width: auto; }
+.rm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.rm-ios { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; }
 
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
@@ -2249,7 +2261,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 :root input[type="checkbox"]:focus-visible, :root input[type="radio"]:focus-visible { box-shadow: none; outline: 2px solid var(--link); outline-offset: 3px; }
 /* 主按鈕：平的，按下才變深；停用＝淡底＋說明色字 */
 .btn-primary { box-shadow: none; }
-.btn-primary:active { transform: none; background: #111b33; }
+.btn-primary:active { transform: none; background: color-mix(in srgb, var(--primary) 80%, #000); }
 .btn-primary.danger:active { background: #9c2c20; }
 .btn-primary:disabled { opacity: 1; background: var(--line); color: var(--sub); }
 .update-bar .btn-primary:active { background: var(--wash); }
@@ -2264,3 +2276,86 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .btn-primary, .btn-timer, .seg button, .dialog-actions .btn-ghost { min-height: 40px; }
   .task-actions .btn-ghost { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
 }
+
+/* ===== 外觀主題（20261117；theme-boot.js 在 <html> 設 data-theme，沒設＝手帳日頁）=====
+   只換 token 與少數外觀（側欄底色、區塊形狀、字型），版面與功能完全相同。對照見 DESIGN.md「外觀主題」。 */
+/* 今日欄裡的三／四格不是獨立卡片：各主題的 .card 外框、圓角、底色都不套到它們 */
+:root[data-theme] .stats > .stat.card { border: 0; border-radius: 0; background: none; }
+:root[data-theme] .stats > .stat + .stat { border-left: 1px solid var(--line); }
+:root[data-theme] { --f-sans: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif; }
+
+/* --- 暖米白（參考 docs/design-reference/claude-DESIGN.md：cream canvas、coral 只給主按鈕、襯線標題 400、深色區塊）--- */
+:root[data-theme=warm] {
+  --paper: #faf9f5; --paper-hi: #ffffff; --grid: transparent; --line: #e6dfd8; --wash: #f5f0e8; --wash-2: #f5f0e8;
+  --ink: #141413; --text: #252523; --text-2: #3d3d3a; --sub: #6c6a64; --mute: #a39f96;
+  --cover: #181715; --cover-2: #1f1e1b; --cover-ink: #faf9f5; --cover-sub: #a09d96;
+  --primary: #b35e3e; /* Claude 原色 #cc785c 配白字只有 3.3:1，加深到 4.5 以上 */ --on-primary: #fff; --link: #a9583e; --link-wash: #f6e7e0; --danger: #c64545; --ok: #3f8f55;
+  --hl: #fbeed2; --radius: 12px;
+  --f-hand: "LXGW WenKai Mono TC", var(--f-sans); --f-num: var(--f-hand); /* 20261117 使用者指定字型；等寬，數字自然對齊 */
+  font-family: var(--f-hand);
+}
+:root[data-theme=warm] .sidebar { background: var(--cover); box-shadow: none; }
+:root[data-theme=warm] .page-head { border-bottom: 1px solid var(--line); }
+:root[data-theme=warm] :is(.card, .stats) { background: var(--wash); border: 0; border-radius: 12px; }
+:root[data-theme=warm] .stats > .stat + .stat { border-left-color: var(--line); }
+:root[data-theme=warm] dialog, :root[data-theme=warm] .auth-card { border-top: 0; border-radius: 16px; }
+:root[data-theme=warm] :is(input:not([type=checkbox], [type=radio]), select, textarea, .btn-primary, .btn-timer, .dialog-actions .btn-ghost) { border-radius: 8px; }
+:root[data-theme=warm] .seg { border-color: var(--line); border-radius: 8px; }
+:root[data-theme=warm] .seg button[aria-pressed=true] { background: var(--ink); color: var(--paper); }
+
+/* --- 簡潔白（參考 Notion：白底、淺灰側欄、黑體、紫色主按鈕、8px 按鈕／12px 卡片）--- */
+:root[data-theme=clean] {
+  --paper: #ffffff; --paper-hi: #ffffff; --grid: transparent; --line: #e5e3df; --wash: #f6f5f4; --wash-2: #fafaf9;
+  --ink: #1a1a1a; --text: #37352f; --text-2: #4a4843; --sub: #5d5b54; --mute: #a4a097;
+  --cover: #f6f5f4; --cover-2: #f6f5f4; --cover-ink: #1a1a1a; --cover-sub: #5d5b54;
+  --primary: #5645d4; --on-primary: #fff; --link: #0075de; --link-wash: #e6f1fc; --danger: #e03131; --ok: #1a8a33;
+  --hl: #fef7d6; --radius: 12px;
+  --f-hand: "Chiron GoRound TC", var(--f-sans); --f-num: var(--f-hand); /* 20261117 使用者指定的圓體 */
+  font-family: var(--f-hand);
+}
+:root[data-theme=clean] .sidebar { background: var(--cover); box-shadow: inset -1px 0 0 var(--line); }
+:root[data-theme=clean] :is(#nav a:hover, .menu-btn:hover, .collapse-btn:hover) { background: rgba(0, 0, 0, .05); color: var(--cover-ink); }
+:root[data-theme=clean] #nav a[aria-current] { background: #ebe9e5; box-shadow: none; border-radius: 6px; }
+:root[data-theme=clean] #nav a[aria-current]::after { display: none; }
+:root[data-theme=clean] .badge { background: rgba(0, 0, 0, .07); }
+:root[data-theme=clean] .sidebar-foot .btn-ghost:hover { color: var(--ink); }
+:root[data-theme=clean] .page-head { border-bottom: 1px solid var(--line); }
+:root[data-theme=clean] :is(.card, .stats) { background: var(--paper-hi); border: 1px solid var(--line); border-radius: 12px; }
+:root[data-theme=clean] .stats > .stat + .stat { border-left-style: solid; }
+:root[data-theme=clean] dialog, :root[data-theme=clean] .auth-card { border-top: 0; border-radius: 12px; }
+:root[data-theme=clean] :is(input:not([type=checkbox], [type=radio]), select, textarea, .btn-primary, .btn-timer, .dialog-actions .btn-ghost) { border-radius: 8px; }
+:root[data-theme=clean] .seg { border-color: var(--line); border-radius: 8px; }
+:root[data-theme=clean] .seg button[aria-pressed=true] { background: var(--wash); color: var(--ink); font-weight: 600; }
+:root[data-theme=clean] .running-bar { box-shadow: 0 2px 6px rgba(0, 0, 0, .12); }
+
+/* --- 深色夜間（手帳日頁的夜間版：保留方格、楷體，紙變深色、墨水變亮）--- */
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --paper: #16191b; --paper-hi: #1f2326; --grid: rgba(255, 255, 255, .035); --line: #33393d; --wash: #272c30; --wash-2: #1c2023;
+  --ink: #dde5f3; --text: #e4e7ea; --text-2: #c4cad0; --sub: #9ca4ac; --mute: #626a72;
+  --cover: #0f1a17; --cover-2: #0b1412; --cover-ink: #e6eee9; --cover-sub: #94aba2;
+  --primary: #4f6fc8; --on-primary: #fff; --link: #8fb4ff; --link-wash: #1f2d48; --danger: #ff7b6b; --ok: #5fcf94;
+  --hl: #463d16; --tip: #e4e7ea; --on-tip: #16191b;
+  --f-hand: "Chiron GoRound TC", var(--f-sans); --f-num: var(--f-hand); /* 20261117 使用者指定的圓體 */
+  font-family: var(--f-hand);
+}
+:root[data-theme=dark] .rb-label { color: #d9c77a; }
+:root[data-theme=dark] input::placeholder, :root[data-theme=dark] textarea::placeholder { color: #7d858c; }
+:root[data-theme=dark] .wb-card.timing { background: var(--hl); border-color: #6b5c1f; }
+:root[data-theme=dark] .wb-due { color: #f1c76d; background: #3a2f12; }
+:root[data-theme=dark] .mock-flag { background: #463d16; color: #f1d98a; }
+:root[data-theme=dark] dialog { box-shadow: 0 24px 60px rgba(0, 0, 0, .6); }
+:root[data-theme=dark] .wb-col[data-col=tomorrow] { --cc: #e3a64a; }
+:root[data-theme=dark] .wb-col[data-col=backlog] { --cc: #e08a78; }
+:root[data-theme=dark] .mo-task .bj { color: color-mix(in srgb, var(--c) 50%, var(--ink)); }
+
+/* 主題選擇視窗 */
+.theme-list { display: flex; flex-direction: column; gap: 8px; }
+.theme-opt { display: flex !important; flex-direction: row !important; align-items: center; gap: 12px !important; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: var(--text) !important; font-size: 15px !important; }
+.theme-opt:hover { background: var(--wash); }
+.theme-opt:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.theme-sw { display: inline-flex; flex: none; }
+.theme-sw i { width: 22px; height: 22px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .15); margin-left: -6px; }
+.theme-sw i:first-child { margin-left: 0; }
+.theme-txt { display: flex; flex-direction: column; min-width: 0; }
+.theme-txt small { color: var(--sub); font-size: 13px; }

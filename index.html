@@ -12,10 +12,16 @@
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <!-- 20261117：加到主畫面（iPhone 要先加到主畫面才收得到網站推播）-->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Why Am I Here?">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=202611172102">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&family=LXGW+WenKai+Mono+TC:wght@400;700&family=Chiron+GoRound+TC:wght@400..700&display=swap">
+  <link rel="stylesheet" href="css/style.css?v=202611172240">
+  <!-- 外觀主題（20261117）：同步執行，畫面出來前先套好主題；霞鶩文楷 Mono（暖米白）、Chiron GoRound（簡潔白、深色夜間）只在選了那個主題時才會下載字型檔 -->
+  <script src="js/theme-boot.js"></script>
 </head>
 <body>
   <!--
@@ -42,7 +48,9 @@
       <div class="running-bar" id="running-bar" hidden></div>
       <div class="sidebar-foot">
         <div class="user" id="user-email"></div>
+        <button class="btn-ghost" id="remind-btn" title="設定通知提醒">提醒</button>
         <button class="btn-ghost" id="feedback-btn" title="寫下建議或問題（會帶上目前頁面）">回饋</button>
+        <button class="btn-ghost" id="theme-btn" title="換外觀主題（只記在這台裝置）">外觀</button>
         <button class="btn-ghost" id="account-btn">修改密碼</button>
         <button class="btn-ghost" id="signout-btn">登出</button>
       </div>
@@ -75,6 +83,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=202611172102"></script>
+  <script type="module" src="js/app.js?v=202611172240"></script>
 </body>
 </html>

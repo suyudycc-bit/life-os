@@ -3222,3 +3222,65 @@ export function healthStats(supps, logs, meals, endDay, n = 7) {
   return { days, supp, mealDays };
 }
 
+// ===== 書店網址帶入書影單 20261117（回饋 6763067d）=====
+// 實測（2026-11-17）：博客來對程式讀取一律回 403（換瀏覽器身分也一樣），誠品的書籍頁內容由 JavaScript 載入、原始碼沒有書名，
+// 所以讀不到網頁內容。改成：從貼上的「網址＋分享文字」拆出網址與書名，書名再交給原本的封面搜尋找作者、年份、封面。
+export const BOOK_STORES = [
+  { re: /(^|\.)books\.com\.tw$/i, name: '博客來' },
+  { re: /(^|\.)eslite\.com$/i, name: '誠品' },
+  { re: /(^|\.)readmoo\.com$/i, name: 'Readmoo' },
+  { re: /(^|\.)kobo\.com$/i, name: 'Kobo' },
+  { re: /(^|\.)taaze\.tw$/i, name: '讀冊' },
+];
+/** 貼上的文字 → { url, store（書店名或 null）, title（猜的書名，可能是空字串） } */
+export function bookFromShare(text) {
+  const { url, body } = splitSharedText(text);
+  let host = '';
+  try { host = url ? new URL(url).hostname : ''; } catch { host = ''; }
+  const store = BOOK_STORES.find((x) => x.re.test(host))?.name || null;
+  let title = String(body || '')
+    .replace(/博客來|誠品線上|誠品書店|誠品|讀冊生活|Readmoo\s*讀墨|Kobo/gi, ' ')
+    .replace(/(推薦|分享)?(給你|一本書|這本書)[:：]?/g, ' ')
+    .split(/\n|｜|\||－| - /)[0];
+  const quoted = /[《「『]([^》」』]{1,80})[》」』]/.exec(body || '');
+  if (quoted) title = quoted[1];
+  title = title.replace(/^[\s:：,，、-]+|[\s:：,，、-]+$/g, '').replace(/\s{2,}/g, ' ').slice(0, 200);
+  return { url, store, title };
+}
+
+// ===== 網站推播提醒 20261117（回饋 4c43dd7a；migration 20261117_push.sql，Edge Function push-reminders）=====
+export async function getReminderSettings() {
+  return must(await supabase.from('reminder_settings').select('*').maybeSingle());
+}
+export async function saveReminderSettings(s) {
+  const hm = (v, d) => (/^\d{2}:\d{2}/.test(String(v || '')) ? String(v).slice(0, 5) : d);
+  const row = { morning_on: Boolean(s.morning_on), morning_time: hm(s.morning_time, '08:30'), evening_on: Boolean(s.evening_on),
+    evening_time: hm(s.evening_time, '21:00'), updated_at: new Date().toISOString() };
+  if (row.morning_on && row.evening_on && row.morning_time >= row.evening_time) throw new Error('早上的提醒要比晚上的早');
+  return must(await supabase.from('reminder_settings').upsert(row, { onConflict: 'user_id' }).select().single());
+}
+/** 存這台裝置的推播訂閱（PushSubscription.toJSON()）；同一個 endpoint 已存在就更新 */
+export async function savePushSubscription(sub) {
+  const j = sub?.toJSON ? sub.toJSON() : sub;
+  if (!j?.endpoint || !j?.keys?.p256dh || !j?.keys?.auth) throw new Error('瀏覽器沒有給出完整的推播訂閱');
+  const row = { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, user_agent: navigator.userAgent.slice(0, 300) };
+  return must(await supabase.from('push_subscriptions').upsert(row, { onConflict: 'endpoint' }).select('id').single());
+}
+export async function deletePushSubscription(endpoint) {
+  must(await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint).select('id'));
+}
+export async function countPushDevices() {
+  return must(await supabase.from('push_subscriptions').select('id')).length;
+}
+/** 呼叫 push-reminders：op＝'key'（取公鑰）／'test'（送測試通知） */
+export async function callPush(op) {
+  const { data: res, error } = await supabase.functions.invoke('push-reminders', { body: { op } });
+  if (error) {
+    let msg = error.message || '';
+    try { msg = (await error.context?.json())?.error || msg; } catch { /* 忽略 */ }
+    if (error.context?.status === 404 || /Failed to send|not found/i.test(msg)) throw new Error('推播服務還沒部署');
+    throw new Error(msg || '推播服務沒有回應');
+  }
+  return res;
+}
+
