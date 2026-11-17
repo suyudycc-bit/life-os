@@ -2359,3 +2359,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .theme-sw i:first-child { margin-left: 0; }
 .theme-txt { display: flex; flex-direction: column; min-width: 0; }
 .theme-txt small { color: var(--sub); font-size: 13px; }
+
+/* ===== 手機選單：整頁抽屜、兩欄（20261117 使用者：手機要滑到最下面才點得到選單後段）=====
+   原本打開選單是把側欄原地撐高（sticky、height:auto），20 多項比螢幕高，只能捲整頁。
+   改成蓋滿畫面、選單自己捲；項目兩欄，常見手機高度一個畫面放得下；帳號列 email 一行、按鈕一行不拆字。 */
+@media (max-width: 760px) {
+  .nav-open .sidebar {
+    position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 60;
+    padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); gap: 6px; overflow: hidden;
+  }
+  :root:has(#app.nav-open) { overflow: hidden; }
+  .nav-open #nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .nav-items-in { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 6px; }
+  #nav a { min-height: 40px; padding: 6px 10px; gap: 9px; }
+  #nav .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nav-group { min-height: 26px; padding: 6px 4px 0; }
+  .nav-open .sidebar-foot {
+    flex: none; flex-wrap: wrap; justify-content: flex-start; gap: 2px 16px;
+    margin-top: 0; padding: 10px 4px 0; border-top: 1px solid color-mix(in srgb, var(--cover-sub) 30%, transparent);
+  }
+  .sidebar-foot .user { flex-basis: 100%; }
+  #app .sidebar-foot .btn-ghost { white-space: nowrap; min-height: 40px; margin-right: 0; }
+}

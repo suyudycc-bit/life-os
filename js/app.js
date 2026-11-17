@@ -233,7 +233,7 @@ function route() {
     unsubscribe = null;
   }
   pageEnter(main); // 翻到新的一頁（motion.js；減少動態時不做）
-  $('#app').classList.remove('nav-open');
+  setNavOpen(false);
 }
 
 function showAuth(message = '') {
@@ -357,7 +357,17 @@ syncNavFold();
 subscribe(updateRunningBar);
 watchStatNumbers($('#main'));
 window.addEventListener('hashchange', () => { if (loadedFor) route(); });
-$('#menu-btn').onclick = () => $('#app').classList.toggle('nav-open');
+$('#menu-btn').onclick = () => setNavOpen(!$('#app').classList.contains('nav-open'));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('#app').classList.contains('nav-open')) setNavOpen(false); });
+
+/** 手機選單開關（20261117：打開時蓋滿畫面，按鈕改成 ✕） */
+function setNavOpen(open) {
+  $('#app').classList.toggle('nav-open', open);
+  const btn = $('#menu-btn');
+  btn.textContent = open ? '✕' : '☰';
+  btn.setAttribute('aria-label', open ? '關閉選單' : '開啟選單');
+  btn.setAttribute('aria-expanded', String(open));
+}
 
 // 側欄收合（只在電腦寬度生效；手機維持抽屜選單）。記在這台裝置的瀏覽器，不存資料庫
 const SIDEBAR_KEY = 'lifeos-sidebar';
