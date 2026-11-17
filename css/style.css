@@ -2134,6 +2134,45 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .yr-fl-head { flex-wrap: wrap; gap: 4px 12px; }
 .yr-fl-done { margin-left: auto; font-size: 13.5px; display: inline-flex; align-items: center; gap: 6px; }
 
+/* ===== 飲食與保健 20261116（回饋 ec337946）===== */
+.hl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.hl-nav { display: flex; align-items: center; gap: 6px; }
+.hl-nav input[type=date] { width: auto; }
+.hl-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 0 18px; align-items: start; }
+@container main (max-width: 860px) { .hl-grid { grid-template-columns: minmax(0, 1fr); } }
+.hl-add { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; margin-bottom: 10px; }
+.hl-add input[name=note] { grid-column: 1 / 3; }
+@container main (max-width: 560px) { .hl-add { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .hl-add input[name=foods], .hl-add input[name=note] { grid-column: 1 / -1; } }
+.hl-meal h3 { margin: 10px 0 4px; font-size: 14px; color: var(--sub); }
+.hl-meal ul, .hl-supp-list, .hl-week-supp { list-style: none; margin: 0; padding: 0; }
+.hl-meal li { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-top: 1px dashed var(--line); }
+.hl-time { font-family: var(--f-num); color: var(--sub); font-size: 13px; }
+.hl-foods { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; display: flex; flex-direction: column; }
+.hl-foods small { font-size: 12.5px; }
+.hl-acts { display: flex; gap: 2px; }
+.hl-acts .btn-ghost { font-size: 12.5px; padding: 1px 6px; }
+.hl-supp-list li { padding: 8px 0; border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 4px; }
+.hl-supp-list li:first-child { border-top: 0; }
+.hl-supp-name { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.hl-supp-name small { width: 100%; font-size: 12.5px; }
+.hl-link { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--ink); cursor: pointer; text-align: left; }
+.hl-slot-checks { display: flex; gap: 14px; flex-wrap: wrap; }
+.hl-off { margin-top: 8px; font-size: 13px; }
+.hl-off .hl-link { font-weight: 400; color: var(--sub); }
+.hl-week-meals { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; text-align: center; margin-bottom: 10px; }
+.hl-week-meals div { padding: 6px 2px; border: 1px solid var(--line); border-radius: 3px; display: flex; flex-direction: column; align-items: center; }
+.hl-week-meals div.is-now { border-color: var(--ink); }
+.hl-week-meals .sub { font-size: 11.5px; }
+.hl-week-meals b { font-family: var(--f-num); font-size: 20px; line-height: 1.2; }
+.hl-week-supp li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 10px; align-items: center; padding: 4px 0; }
+.hl-form { display: flex; flex-direction: column; gap: 8px; }
+.hl-form label { display: flex; flex-direction: column; gap: 4px; }
+.hl-form label.check { flex-direction: row; align-items: center; gap: 6px; }
+.hl-form input:not([type=checkbox]), .hl-form select, .hl-form textarea { width: 100%; box-sizing: border-box; }
+.hl-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hl-slots { border: 1px solid var(--line); border-radius: 3px; padding: 6px 10px; display: flex; gap: 14px; flex-wrap: wrap; }
+.hl-slots legend { font-size: 13.5px; padding: 0 4px; }
+
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
    原則：短（≤260ms）、只動 opacity／transform、拖移中與完成動畫中的元素不套用。 */
@@ -2198,4 +2237,30 @@ dialog[open]::backdrop { animation: fade-in .2s ease-out; }
   }
   :is(.btn-ghost, .btn-timer, .seg button, .tag-btn, .hday):active,
   .nt-card:hover, .pj-card:hover, .wb-card:hover { transform: none !important; }
+}
+
+/* ===== DESIGN.md 借用規則（20261117；參考 docs/design-reference/claude-DESIGN.md，只借規則、不換手帳識別；對照表見 DESIGN.md）===== */
+:root { --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; }
+/* 輸入框聚焦：墨水色邊框＋3px 淡墨水外環（取代 2px 藍框；底線式輸入框 .ovi-row／.rv-intent 維持原樣） */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 15%, transparent);
+}
+.ovi-row input:focus-visible, .rv-intent input:focus-visible { box-shadow: none; }
+:root input[type="checkbox"]:focus-visible, :root input[type="radio"]:focus-visible { box-shadow: none; outline: 2px solid var(--link); outline-offset: 3px; }
+/* 主按鈕：平的，按下才變深；停用＝淡底＋說明色字 */
+.btn-primary { box-shadow: none; }
+.btn-primary:active { transform: none; background: #111b33; }
+.btn-primary.danger:active { background: #9c2c20; }
+.btn-primary:disabled { opacity: 1; background: var(--line); color: var(--sub); }
+.update-bar .btn-primary:active { background: var(--wash); }
+/* 次要按鈕：對話框底部的取消等，細線框、和主按鈕同高 */
+.dialog-actions .btn-ghost { border-color: var(--line); background: var(--paper-hi); color: var(--text-2); padding: 8px 16px; }
+.dialog-actions .btn-ghost:hover { border-color: var(--mute); background: var(--wash); color: var(--ink); }
+.dialog-actions .btn-ghost.danger:hover { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); }
+/* 說明小字 13px */
+.task-meta, .stat-note { font-size: 13px; }
+/* 手機觸控目標 */
+@media (max-width: 760px) {
+  .btn-primary, .btn-timer, .seg button, .dialog-actions .btn-ghost { min-height: 40px; }
+  .task-actions .btn-ghost { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
 }

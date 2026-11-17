@@ -26,6 +26,7 @@ import { mountReflect } from './views/reflect.js';
 import { mountFeedback, openFeedbackDialog } from './views/feedback.js';
 import { mountQuotes } from './views/quotes-book.js';
 import { mountTools } from './views/tools.js';
+import { mountHealth } from './views/health.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -45,6 +46,7 @@ const ICONS = {
   inbox: '<path d="M4 13.5 6.5 5h11l2.5 8.5V19H4z"/><path d="M4 13.5h4.5l1 2h5l1-2H20M12 3.5v6.5M9.5 7.5 12 10l2.5-2.5"/>',
   notes: '<path d="M12 3a6 6 0 0 0-3.5 10.9V17h7v-3.1A6 6 0 0 0 12 3z"/><path d="M9.5 20h5"/>',
   media: '<path d="M12 6.5C10 5 7 4.5 4 5v13c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5zM12 6.5v13"/><path d="M15 9.5h2.5M15 12.5h2.5"/>',
+  health: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M9 11h6M12 8v6"/>',
   habits: '<path d="M4 18c3-7 6-9 8-9s3 2 3 4-1 3-2 3-2-1-1-3 3-5 8-7"/>',
   workboard: '<path d="M4 4h16v16H4zM9.5 4v16M14.5 4v16"/><path d="M6 7.5h2M11 7.5h2M16 7.5h2M6 10.5h2M16 10.5h2"/>',
   // 跟進對象：一個人＋名單橫線
@@ -79,6 +81,7 @@ const ROUTES = [
   { id: 'review', label: '每日復盤', mount: mountReview, group: '回顧' },
   { id: 'stats', label: '時間統計', mount: mountStats, group: '回顧' },
   { id: 'habits', label: '習慣養成', mount: mountHabits, group: '回顧' },
+  { id: 'health', label: '飲食與保健', mount: mountHealth, group: '回顧' }, // 20261116 來自回饋
   { id: 'reflect', label: '內在整理', mount: mountReflect, group: '回顧' }, // 20261108 顯化規劃・階段三
   { id: 'inbox', label: '待看清單', mount: mountInbox, group: '收藏', badge: true },
   { id: 'notes', label: '靈感知識庫', mount: mountNotes, group: '收藏' },

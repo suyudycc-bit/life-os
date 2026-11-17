@@ -884,7 +884,8 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'reflections', // 20261108 內在整理（參照 tasks、areas，所以排在它們之後）
   'feedback', // 20261111 回饋匣（不參照其他表）
   'quotes', // 20261112 佳句本（參照 media_items）
-  'tools']; // 20261114 工具箱（不參照其他表）
+  'tools', // 20261114 工具箱（不參照其他表）
+  'meal_logs', 'supplements', 'supplement_logs']; // 20261116 飲食與保健（logs 參照 supplements，排在後面）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
@@ -892,6 +893,7 @@ export const BACKUP_LABELS = {
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
   reflections: '內在整理', feedback: '回饋', quotes: '佳句本', tools: '工具箱',
+  meal_logs: '飲食紀錄', supplements: '保健食品', supplement_logs: '保健食品打勾',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -931,6 +933,7 @@ const BACKUP_REFS = {
   contact_logs: { contact_id: 'contacts' },
   reflections: { task_id: 'tasks', area_id: 'areas' },
   quotes: { media_id: 'media_items' },
+  supplement_logs: { supplement_id: 'supplements' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -958,9 +961,12 @@ const NATURAL_KEY = {
   feedback: (r) => `${r.created_at}|${r.body}`,
   quotes: (r) => `${r.body}|${r.created_at}`,
   tools: (r) => `${r.name}|${r.created_at}`,
+  meal_logs: (r) => `${r.entry_date}|${r.meal}|${r.foods}|${r.created_at}`,
+  supplements: (r) => `${r.name}|${r.created_at}`,
+  supplement_logs: (r) => `${r.supplement_id}|${r.log_date}|${r.slot}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
-const REQUIRED_REFS = { contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
+const REQUIRED_REFS = { supplement_logs: ['supplement_id'], contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
   projects: ['area_id'], goals: ['area_id'] };
 
 /**
@@ -1657,12 +1663,14 @@ const TRASH_SPEC = {
   routine_phrases: { label: (r) => (r.body || '').slice(0, 40) },
   quotes: { label: (r) => (r.body || '').split('\n')[0].slice(0, 40) },
   tools: { label: (r) => r.name },
+  meal_logs: { label: (r) => `${r.entry_date}・${(r.foods || '').slice(0, 30)}` },
+  supplements: { label: (r) => r.name, cascade: { supplement_logs: 'supplement_id' } },
   reflections: { label: (r) => `${REFLECT_KINDS[r.kind] || '便籤'}・${(r.event || '').split('\n')[0].slice(0, 40) || '（沒寫事件）'}` },
 };
 export const TRASH_LABELS = { tasks: '任務', projects: '專案', goals: '目標', habits: '習慣', notes: '靈感', contacts: '跟進對象',
   contact_stages: '跟進階段', work_tags: '標籤', task_memos: '進度 memo', time_entries: '計時', media_items: '書影單',
   bucket_items: '想做清單', future_events: 'Future Log', inbox_items: '待看清單', routine_phrases: '常用詞組',
-  reflections: '內在整理', quotes: '佳句', tools: '工具' };
+  reflections: '內在整理', quotes: '佳句', tools: '工具', meal_logs: '飲食紀錄', supplements: '保健食品' };
 
 /** 刪除一筆：先存進垃圾桶，再刪除。areas 不走這裡（領域有任務掛著時資料庫會擋） */
 export async function trashDelete(table, id) {
@@ -3123,3 +3131,94 @@ export async function inboxToTool(it, fields = {}) {
   await setInboxDone(it.id, true);
   return saved;
 }
+
+// ===== 飲食與保健 20261116（來自回饋 ec337946；migration 20261116_health.sql）=====
+export const MEALS = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '點心', drink: '飲品' };
+export const SUPP_SLOTS = { morning: '早上', noon: '中午', evening: '晚上', bedtime: '睡前' };
+
+/** 依時間猜現在是哪一餐（新增表單的預設） */
+export function guessMeal(hour = Number(new Date().toLocaleString('en-US', { timeZone: 'Asia/Taipei', hour: 'numeric', hour12: false }))) {
+  if (hour >= 5 && hour < 10) return 'breakfast';
+  if (hour >= 11 && hour < 14) return 'lunch';
+  if (hour >= 17 && hour < 21) return 'dinner';
+  return 'snack';
+}
+
+export async function listMeals(from, to) {
+  return must(await supabase.from('meal_logs').select('*').gte('entry_date', from).lte('entry_date', to).order('entry_date').order('created_at'));
+}
+export async function saveMeal(m) {
+  const foods = String(m.foods || '').trim();
+  if (!foods) throw new Error('請寫下吃了什麼');
+  if (!MEALS[m.meal]) throw new Error('請選哪一餐');
+  if (!m.entry_date) throw new Error('請選日期');
+  const row = { entry_date: m.entry_date, meal: m.meal, eaten_at: m.eaten_at || null, foods: foods.slice(0, 1000),
+    note: String(m.note || '').trim().slice(0, 1000) || null, updated_at: new Date().toISOString() };
+  if (m.id) {
+    const rows = must(await supabase.from('meal_logs').update(row).eq('id', m.id).select());
+    if (rows.length !== 1) throw new Error('找不到這筆飲食紀錄（可能已被刪除）');
+    return rows[0];
+  }
+  return must(await supabase.from('meal_logs').insert(row).select().single());
+}
+export const deleteMeal = (id) => trashDelete('meal_logs', id);
+
+/** 一天的飲食依餐別分組（同餐依時間、再依建立順序） */
+export function mealsByType(meals) {
+  const out = Object.fromEntries(Object.keys(MEALS).map((k) => [k, []]));
+  for (const m of meals) (out[m.meal] || out.snack).push(m);
+  for (const k of Object.keys(out)) out[k].sort((a, b) => String(a.eaten_at || '99').localeCompare(String(b.eaten_at || '99')) || String(a.created_at).localeCompare(String(b.created_at)));
+  return out;
+}
+
+export async function listSupplements() {
+  return must(await supabase.from('supplements').select('*').order('sort', { nullsFirst: false }).order('created_at'));
+}
+export async function saveSupplement(sp) {
+  const name = String(sp.name || '').trim();
+  if (!name) throw new Error('請輸入保健食品名稱');
+  const slots = (sp.slots || []).filter((x) => SUPP_SLOTS[x]);
+  if (!slots.length) throw new Error('請至少選一個吃的時段');
+  const row = { name: name.slice(0, 80), dose: String(sp.dose || '').trim().slice(0, 40) || null, slots,
+    note: String(sp.note || '').trim().slice(0, 500) || null, active: sp.active !== false };
+  if (sp.id) {
+    const rows = must(await supabase.from('supplements').update(row).eq('id', sp.id).select());
+    if (rows.length !== 1) throw new Error('找不到這個保健食品（可能已被刪除）');
+    return rows[0];
+  }
+  return must(await supabase.from('supplements').insert(row).select().single());
+}
+export const deleteSupplement = (id) => trashDelete('supplements', id);
+
+export async function listSupplementLogs(from, to) {
+  return must(await supabase.from('supplement_logs').select('*').gte('log_date', from).lte('log_date', to));
+}
+/** 打勾／取消：taken＝true 新增一列（已存在就當成功），false 刪掉那一列 */
+export async function setSupplementTaken(supplementId, day, slot, taken) {
+  if (!SUPP_SLOTS[slot]) throw new Error('時段不正確');
+  if (taken) {
+    const { error } = await supabase.from('supplement_logs').insert({ supplement_id: supplementId, log_date: day, slot });
+    if (error && error.code !== '23505') throw new Error(error.message);
+    return;
+  }
+  must(await supabase.from('supplement_logs').delete().eq('supplement_id', supplementId).eq('log_date', day).eq('slot', slot).select('id'));
+}
+
+/**
+ * 近 n 天的統計（含今天往前）：每個啟用中的保健食品「吃了幾次／應吃幾次」（應吃＝天數×時段數，從它建立那天起算），
+ * 以及每天記了幾餐。UI 只顯示。
+ */
+export function healthStats(supps, logs, meals, endDay, n = 7) {
+  const days = Array.from({ length: n }, (_, i) => addDays(endDay, i - n + 1));
+  const set = new Set(logs.map((l) => `${l.supplement_id}|${l.log_date}|${l.slot}`));
+  const supp = supps.filter((s) => s.active).map((s) => {
+    const since = localDate(s.created_at);
+    const valid = days.filter((d) => d >= since);
+    const planned = valid.length * s.slots.length;
+    const taken = valid.reduce((k, d) => k + s.slots.filter((sl) => set.has(`${s.id}|${d}|${sl}`)).length, 0);
+    return { supp: s, taken, planned, pct: planned ? Math.round((taken / planned) * 100) : null };
+  });
+  const mealDays = days.map((d) => ({ day: d, count: meals.filter((m) => m.entry_date === d).length }));
+  return { days, supp, mealDays };
+}
+

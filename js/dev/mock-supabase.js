@@ -52,6 +52,9 @@ const DEFAULTS = {
   // migration 20261112_quotes（佳句本）
   quotes: () => ({ author: null, source: null, thought: null, media_id: null, in_daily: true, updated_at: null }),
   // migration 20261114_tools（工具箱）
+  // migration 20261116_health（飲食與保健）
+  meal_logs: () => ({ eaten_at: null, note: null, updated_at: null }),
+  supplements: () => ({ dose: null, slots: ['morning'], note: null, active: true, sort: null }),
   tools: () => ({ kind: 'saved', url: null, admin_url: null, category: null, platform: null, description: null, status: null, starred: false, updated_at: null }),
 };
 
@@ -168,7 +171,7 @@ class Query {
           }
         }
         // 20261106：work_tags 改成 (user_id, kind, label) 唯一（tasks 的 case_no 唯一已由 20261111_case_shared 拿掉）
-        const uniq = { work_tags: (x) => `${x.kind || 'type'}|${x.label}` }[this.table];
+        const uniq = { work_tags: (x) => `${x.kind || 'type'}|${x.label}`, supplement_logs: (x) => `${x.supplement_id}|${x.log_date}|${x.slot}` }[this.table]; // 20261116 supplement_logs 唯一
         if (uniq) {
           const seen = new Set(rows.filter((x) => x.user_id === uid).map(uniq).filter((v) => v != null));
           for (const r of out) {
@@ -273,6 +276,10 @@ class Query {
         if (this.table === 'notes') { // media_items.note_id on delete set null（migration 20261105）
           const ids = new Set(out.map((r) => r.id));
           for (const m of db.media_items || []) if (ids.has(m.note_id)) m.note_id = null;
+        }
+        if (this.table === 'supplements') { // supplement_logs on delete cascade（migration 20261116）
+          const ids = new Set(out.map((r) => r.id));
+          db.supplement_logs = (db.supplement_logs || []).filter((l) => !ids.has(l.supplement_id));
         }
         if (this.table === 'media_items') { // quotes.media_id on delete set null（migration 20261112）
           const ids = new Set(out.map((r) => r.id));
