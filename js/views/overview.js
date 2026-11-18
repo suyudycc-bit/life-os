@@ -39,10 +39,6 @@ export function mountOverview(root) {
         <button type="button" class="btn-ghost" id="ov-quote-copy">複製</button>
       </div>
     </figure>
-    <section class="card ov-ai" id="ov-ai" hidden aria-labelledby="ov-ai-title">
-      <div class="day-head"><h2 id="ov-ai-title">AI 洞察</h2><button type="button" class="btn-ghost" id="ov-ai-grants">管理 AI 連接</button></div>
-      <div id="ov-ai-body"></div>
-    </section>
     <section class="card ov-intent" aria-labelledby="ov-intent-title">
       <div class="day-head"><h2 id="ov-intent-title">今天的我</h2><span class="sub" id="ov-intent-save" role="status"></span></div>
       <div class="ovi-grid">
@@ -120,7 +116,12 @@ export function mountOverview(root) {
           </div>
         </form>
       </section>
-    </div>`;
+    </div>
+    <!-- 20261119 回饋 8db4c06f：AI 洞察放在總覽最下面 -->
+    <section class="card ov-ai" id="ov-ai" hidden aria-labelledby="ov-ai-title">
+      <div class="day-head"><h2 id="ov-ai-title">AI 洞察</h2><button type="button" class="btn-ghost" id="ov-ai-grants">管理 AI 連接</button></div>
+      <div id="ov-ai-body"></div>
+    </section>`;
   if (firstVisit) { try { localStorage.setItem(GUIDE_TIP_KEY, 'seen'); } catch { /* 忽略 */ } }
   $('#ov-guide-close', root).onclick = () => {
     tipState = 'dismissed';
@@ -264,13 +265,16 @@ export function mountOverview(root) {
   // ===== AI 洞察（20261118，docs/16）：AI 夥伴（Claude 排程分析）寫回的最新一則；可標有用／沒用、寫一句回饋，下次分析會讀到 =====
   let aiDay = null;
   let aiItems = [];
+  let aiIdx = 0; // 看第幾則（0＝最新）；20261118 起可以翻之前的分析
   async function loadAi() {
-    try { aiItems = await data.listInsights(3); } catch { aiItems = []; } // 還沒執行 migration 時整塊不顯示
+    try { aiItems = await data.listInsights(8); } catch { aiItems = []; } // 還沒執行 migration 時整塊不顯示
+    if (aiIdx >= aiItems.length) aiIdx = 0;
     renderAi();
   }
+  const AI_STATUS = { good: ['不錯', 'good'], watch: ['要注意', 'watch'], missing: ['資料不足', 'missing'] };
   function renderAi() {
     const sec = $('#ov-ai', root);
-    const it = aiItems[0];
+    const it = aiItems[aiIdx];
     sec.hidden = !it;
     if (!it) return;
     const list = (title, xs) => (xs?.length ? `<div class="ova-list"><b>${title}</b><ul>${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
@@ -279,6 +283,9 @@ export function mountOverview(root) {
       <p class="ova-head"><span class="ova-kind">${esc(data.INSIGHT_KINDS[it.kind] || 'AI 洞察')}</span><b>${esc(it.title)}</b><span class="sub">${esc(period)}</span></p>
       <p class="ova-sum">${esc(it.summary)}</p>
       <div class="ova-cols">${list('做得好', it.wins)}${list('要注意', it.risks)}${list('建議', it.suggestions)}</div>
+      ${it.sections?.length ? `<details class="ova-plan ova-secs"><summary>逐項分析（${it.sections.length} 個面向）</summary>
+        <ul>${it.sections.map((x) => { const [label, cls] = AI_STATUS[x.status] || AI_STATUS.watch; return `<li><p><b>${esc(x.dimension)}</b><span class="ova-st ${cls}">${label}</span></p><p>${esc(x.observation)}</p>${x.suggestion ? `<p class="sub">→ ${esc(x.suggestion)}</p>` : ''}</li>`; }).join('')}</ul></details>` : ''}
+      ${it.trend ? `<details class="ova-plan"><summary>和前幾週比較</summary><p>${esc(it.trend)}</p></details>` : ''}
       ${it.plan ? `<details class="ova-plan"><summary>下一期優化方案</summary><p>${esc(it.plan)}</p></details>` : ''}
       ${it.task_ids?.length ? `<p class="sub">這次新增了 ${it.task_ids.length} 件任務（標題開頭「AI｜」）。</p>` : ''}
       <div class="ova-rate" data-id="${it.id}">
@@ -286,16 +293,19 @@ export function mountOverview(root) {
         <button type="button" class="btn-ghost ${it.rating === 'not_useful' ? 'on' : ''}" data-rate="not_useful" aria-pressed="${it.rating === 'not_useful'}">👎 沒用</button>
         <input class="ova-fb" maxlength="1000" placeholder="想怎麼調整？例如：多看飲食、少講工作" value="${esc(it.user_feedback || '')}" aria-label="給 AI 的回饋">
         <button type="button" class="btn-ghost" data-fb>送出</button>
-      </div>`;
+      </div>
+      ${aiItems.length > 1 ? `<p class="ova-nav"><button type="button" class="btn-ghost" data-ai-step="1" ${aiIdx >= aiItems.length - 1 ? 'disabled' : ''}>‹ 前一則</button><span class="sub">第 ${aiIdx + 1}／${aiItems.length} 則</span><button type="button" class="btn-ghost" data-ai-step="-1" ${aiIdx === 0 ? 'disabled' : ''}>後一則 ›</button></p>` : ''}`;
   }
   $('#ov-ai', root).addEventListener('click', async (e) => {
+    const step = e.target.closest('[data-ai-step]');
+    if (step) { aiIdx = Math.min(aiItems.length - 1, Math.max(0, aiIdx + Number(step.dataset.aiStep))); renderAi(); return; }
     const wrap = e.target.closest('.ova-rate');
     if (!wrap) return;
     const r = e.target.closest('[data-rate]');
     const fb = e.target.closest('[data-fb]');
     if (!r && !fb) return;
     try {
-      const cur = aiItems[0];
+      const cur = aiItems[aiIdx];
       if (r) await data.rateInsight(wrap.dataset.id, { rating: cur.rating === r.dataset.rate ? null : r.dataset.rate });
       if (fb) await data.rateInsight(wrap.dataset.id, { feedback: $('.ova-fb', wrap).value });
       toast(fb ? '已送出，下次分析會照這個調整' : '已記下');

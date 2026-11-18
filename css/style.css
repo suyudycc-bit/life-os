@@ -2186,6 +2186,7 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .rm-ios { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; }
 
 /* ===== AI 夥伴 20261118（docs/16）===== */
+.ov-ai { margin-top: 16px; } /* 20261119 回饋 8db4c06f：移到總覽最下面，和上一列隔開 */
 .ova-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 4px; }
 .ova-kind { font-size: 12px; padding: 1px 6px; border: 1px solid var(--ink); border-radius: 3px; color: var(--ink); }
 .ova-sum { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -2193,6 +2194,14 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 @container main (max-width: 700px) { .ova-cols { grid-template-columns: minmax(0, 1fr); } }
 .ova-list ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
 .ova-plan { margin-top: 8px; } .ova-plan p { white-space: pre-wrap; margin: 6px 0 0; }
+.ova-secs ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.ova-secs li { padding: 8px 0; border-top: 1px dashed var(--line); }
+.ova-secs li p { margin: 2px 0; }
+.ova-st { margin-left: 8px; font-size: 12px; padding: 0 6px; border-radius: 3px; border: 1px solid var(--line); }
+.ova-st.good { border-color: var(--ink); }
+.ova-st.watch { border-color: var(--danger); color: var(--danger); }
+.ova-st.missing { color: var(--sub); border-style: dashed; }
+.ova-nav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 10px 0 0; }
 .ova-rate { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .ova-rate .on { border-color: var(--ink); font-weight: 700; }
 .ova-fb { flex: 1 1 220px; }
@@ -2427,3 +2436,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .sidebar-foot .user { flex-basis: 100%; }
   #app .sidebar-foot .btn-ghost { white-space: nowrap; min-height: 40px; margin-right: 0; }
 }
+
+/* 使用說明「最近更新」（20261119 回饋 30e06bda） */
+.guide-changes { list-style: none; margin: 0; padding: 0; }
+.guide-changes li { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.guide-changes li:first-child { border-top: 0; }
+.guide-changes time { font-family: var(--f-num); color: var(--sub); font-variant-numeric: tabular-nums; }
