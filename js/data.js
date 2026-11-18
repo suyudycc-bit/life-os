@@ -103,7 +103,8 @@ export async function createArea({ name, kind, color, on_board = false }, areas)
 // ===== 任務 =====
 const TASK_FIELDS = ['title', 'notes', 'area_id', 'project_id', 'goal_id', 'status', 'priority',
   'starred', 'due_date', 'scheduled_start', 'estimate_min', 'sort_order', 'links', 'case_no', 'work_type_id',
-  'board_parked', 'work_project_tag_id']; // 20261106：看板停在累積未完成、看板專案標籤
+  'board_parked', 'work_project_tag_id', // 20261106：看板停在累積未完成、看板專案標籤
+  'is_experiment', 'learning']; // 20261118：小實驗與學到什麼
 
 function pickTask(obj) {
   if (obj.links != null) assertWebLinks(obj.links); // 資安 20261111：任務連結只收 http(s)
@@ -197,8 +198,14 @@ export async function updateTask(id, patch) {
 
 /** 完成／取消完成；completed_at 由資料庫觸發器寫入（聯動規則 3）。若此任務正在計時，先結束計時 */
 export async function setTaskDone(id, done, running = null) {
-  if (done && running?.task_id === id) await stopTimer(running);
-  return updateTask(id, { status: done ? 'done' : 'todo' });
+  if (done && running?.task_id === id) await stopTimer(running, { quiet: true });
+  const out = await updateTask(id, { status: done ? 'done' : 'todo' });
+  if (done) activityEnded({ task_id: id, entry_id: running?.task_id === id ? running.id : null, done: true }); // 20261118 好時光日誌
+  return out;
+}
+/** 一段活動結束（停止計時、打勾完成）：通知畫面問「投入／能量」（views/energy.js），資料層不等它 */
+function activityEnded(detail) {
+  try { window.dispatchEvent(new CustomEvent('lifeos:activity-ended', { detail })); } catch { /* 非瀏覽器環境 */ }
 }
 
 export async function deleteTask(id) {
@@ -236,10 +243,11 @@ export async function startTimer(task) {
 }
 
 /** 暫停＝結束目前這筆 entry；duration_sec 與任務 actual_sec 由資料庫觸發器計算 */
-export async function stopTimer(entry) {
+export async function stopTimer(entry, { quiet = false } = {}) {
   const rows = must(await supabase.from('time_entries').update({ ended_at: new Date().toISOString() })
     .eq('id', entry.id).is('ended_at', null).select('id'));
   if (rows.length !== 1) throw new Error('這筆計時已經結束了');
+  if (!quiet) activityEnded({ task_id: entry.task_id, entry_id: entry.id });
 }
 
 /** 手動補記：需填開始與結束時間 */
@@ -885,7 +893,8 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'feedback', // 20261111 回饋匣（不參照其他表）
   'quotes', // 20261112 佳句本（參照 media_items）
   'tools', // 20261114 工具箱（不參照其他表）
-  'meal_logs', 'supplements', 'supplement_logs']; // 20261116 飲食與保健（logs 參照 supplements，排在後面）
+  'meal_logs', 'supplements', 'supplement_logs', // 20261116 飲食與保健（logs 參照 supplements，排在後面）
+  'energy_logs']; // 20261118 好時光日誌（參照 tasks、time_entries、areas）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
@@ -893,7 +902,7 @@ export const BACKUP_LABELS = {
   period_reviews: '月／季／年回顧', future_events: 'Future Log', media_items: '書影單', bucket_items: '想做清單',
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
   reflections: '內在整理', feedback: '回饋', quotes: '佳句本', tools: '工具箱',
-  meal_logs: '飲食紀錄', supplements: '保健食品', supplement_logs: '保健食品打勾',
+  meal_logs: '飲食紀錄', supplements: '保健食品', supplement_logs: '保健食品打勾', energy_logs: '投入與能量',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
@@ -934,6 +943,7 @@ const BACKUP_REFS = {
   reflections: { task_id: 'tasks', area_id: 'areas' },
   quotes: { media_id: 'media_items' },
   supplement_logs: { supplement_id: 'supplements' },
+  energy_logs: { task_id: 'tasks', entry_id: 'time_entries', area_id: 'areas' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -964,6 +974,7 @@ const NATURAL_KEY = {
   meal_logs: (r) => `${r.entry_date}|${r.meal}|${r.foods}|${r.created_at}`,
   supplements: (r) => `${r.name}|${r.created_at}`,
   supplement_logs: (r) => `${r.supplement_id}|${r.log_date}|${r.slot}`,
+  energy_logs: (r) => `${r.created_at}|${r.task_id || ''}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
 const REQUIRED_REFS = { supplement_logs: ['supplement_id'], contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
@@ -1646,7 +1657,7 @@ export function yearStats({ year, tasks, entries, goals, habitLogs, media, areas
 // --- 垃圾桶：刪除前把那筆＋底下會被連帶刪除的資料＋會被取消的關聯存起來，30 天內可還原 ---
 export const TRASH_DAYS = 30;
 const TRASH_SPEC = {
-  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id' } },
+  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id', energy_logs: 'task_id' } },
   projects: { label: (r) => r.name, setnull: { tasks: 'project_id', goals: 'project_id', habits: 'project_id' } },
   goals: { label: (r) => r.title, setnull: { tasks: 'goal_id', habits: 'goal_id' } },
   habits: { label: (r) => r.name, cascade: { habit_logs: 'habit_id' } },
@@ -1655,7 +1666,7 @@ const TRASH_SPEC = {
   contact_stages: { label: (r) => r.label, setnull: { contacts: 'stage_id' } },
   work_tags: { label: (r) => r.label, setnull: { tasks: ['work_type_id', 'work_project_tag_id'] } },
   task_memos: { label: (r) => (r.body || '').slice(0, 40) },
-  time_entries: { label: (r) => `計時 ${localDate(r.started_at)}` },
+  time_entries: { label: (r) => `計時 ${localDate(r.started_at)}`, setnull: { energy_logs: 'entry_id' } },
   media_items: { label: (r) => r.title, setnull: { quotes: 'media_id' } },
   bucket_items: { label: (r) => r.title },
   future_events: { label: (r) => r.title },
@@ -1734,7 +1745,7 @@ export async function restoreTrash(trashId) {
 // 還原前的檢查：可留白的關聯若已不存在就清空（並說明）；必填的領域不存在就停下（案件編號照舊保留，20261111）
 const RESTORE_OPTIONAL_REFS = { project_id: ['projects', '專案'], goal_id: ['goals', '目標'], work_type_id: ['work_tags', '工作種類'],
   work_project_tag_id: ['work_tags', '專案標籤'], note_id: ['notes', '靈感'], stage_id: ['contact_stages', '跟進階段'], task_id: ['tasks', '任務'],
-  habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'], media_id: ['media_items', '書影單'] };
+  habit_id: ['habits', '習慣'], contact_id: ['contacts', '跟進對象'], media_id: ['media_items', '書影單'], entry_id: ['time_entries', '計時'] };
 async function restoreFixRefs(table, original) {
   const row = { ...original };
   const notes = [];
@@ -3283,4 +3294,91 @@ export async function callPush(op) {
   }
   return res;
 }
+
+// ===== AI 夥伴 20261118（docs/16-ai-agent-plan.md；migration 20261118_ai_insights.sql，MCP 入口 lifeos-mcp）=====
+export const INSIGHT_KINDS = { weekly: '週回顧', monthly: '月回顧', quarterly: '季回顧', adhoc: 'AI 洞察' };
+export async function listInsights(limit = 5) {
+  return must(await supabase.from('ai_insights').select('*').order('created_at', { ascending: false }).limit(limit));
+}
+/** 使用者對一則洞察的評價（useful／not_useful／null）與回饋；下一次分析會讀到 */
+export async function rateInsight(id, { rating, feedback } = {}) {
+  const patch = { read_at: new Date().toISOString() };
+  if (rating !== undefined) patch.rating = rating === 'useful' || rating === 'not_useful' ? rating : null;
+  if (feedback !== undefined) patch.user_feedback = String(feedback || '').trim().slice(0, 1000) || null;
+  const rows = must(await supabase.from('ai_insights').update(patch).eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error('找不到這則洞察');
+}
+/** 已授權連接的 AI（Supabase OAuth 伺服器的授權紀錄）；功能沒開時回 [] */
+export async function listAiGrants() {
+  if (!supabase.auth.oauth?.getUserGrants) return [];
+  const { data, error } = await supabase.auth.oauth.getUserGrants();
+  if (error) return [];
+  return data || [];
+}
+export async function revokeAiGrant(clientId) {
+  const { error } = await supabase.auth.oauth.revokeGrant(clientId);
+  if (error) throw new Error(error.message);
+}
+
+// ===== 人生設計紀錄 20261118（docs/16 A～D；migration 20261118b_life_design.sql）=====
+export const ENGAGEMENT = { high: '很投入', mid: '普通', low: '提不起勁' };
+export const ENERGY = { charge: '充電', neutral: '普通', drain: '耗能' };
+export const GAUGES = [['health', '健康', '身心狀態、睡眠、運動、飲食'], ['work', '工作', '有給或無給的工作、學習、貢獻'], ['play', '玩樂', '純粹為了開心而做的事'], ['love', '愛', '伴侶、家人、朋友、社群、寵物']];
+
+/** A 好時光日誌：記一筆投入／能量（至少一個） */
+export async function logEnergy({ task_id = null, entry_id = null, area_id = null, engagement = null, energy = null }) {
+  if (!ENGAGEMENT[engagement] && !ENERGY[energy]) throw new Error('請選投入或能量');
+  return must(await supabase.from('energy_logs').insert({ task_id, entry_id, area_id,
+    engagement: ENGAGEMENT[engagement] ? engagement : null, energy: ENERGY[energy] ? energy : null }).select().single());
+}
+export async function listEnergyLogs(from, to) {
+  return must(await supabase.from('energy_logs').select('*').gte('log_date', from).lte('log_date', to).order('created_at'));
+}
+/** 能量地圖：依任務彙總（充電＋1、耗能−1；投入高＋1、低−1），回傳最充電與最耗能的前幾名 */
+export function energyMap(logs, tasksById, n = 3) {
+  const by = {};
+  for (const l of logs) {
+    const title = tasksById[l.task_id]?.title || '（沒有任務）';
+    const x = (by[title] ||= { title, charge: 0, drain: 0, high: 0, low: 0, count: 0 });
+    x.count++;
+    if (l.energy === 'charge') x.charge++;
+    if (l.energy === 'drain') x.drain++;
+    if (l.engagement === 'high') x.high++;
+    if (l.engagement === 'low') x.low++;
+  }
+  const score = (x) => x.charge - x.drain + (x.high - x.low) * 0.5;
+  const all = Object.values(by).sort((a, b) => score(b) - score(a));
+  return { top: all.filter((x) => score(x) > 0).slice(0, n), bottom: all.filter((x) => score(x) < 0).reverse().slice(0, n) };
+}
+
+/** B 每月四個儀表自評：只寫 gauges，不碰同一列的其他欄位 */
+export async function saveGauges(month, gauges) {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('月份格式不正確');
+  const clean = {};
+  for (const [k] of GAUGES) {
+    const v = Number(gauges?.[k]);
+    if (Number.isFinite(v)) clean[k] = Math.max(0, Math.min(100, Math.round(v / 5) * 5));
+  }
+  const session = await getSession();
+  return must(await supabase.from('period_reviews').upsert({ user_id: session.user.id, period: month, gauges: clean, updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,period' }).select().single());
+}
+
+/** D 奧德賽計畫、工作觀、人生觀（年度那一列）：只寫這三欄 */
+export async function saveLifeDesign(year, { odyssey, workview, lifeview }) {
+  const period = String(year);
+  if (!/^\d{4}$/.test(period)) throw new Error('只存在年度');
+  const plans = (Array.isArray(odyssey) ? odyssey : []).slice(0, 3).map((p) => ({
+    title: String(p?.title || '').trim().slice(0, 60), questions: String(p?.questions || '').trim().slice(0, 500),
+  }));
+  const session = await getSession();
+  return must(await supabase.from('period_reviews').upsert({ user_id: session.user.id, period, odyssey: plans,
+    workview: String(workview || '').trim().slice(0, 2000) || null, lifeview: String(lifeview || '').trim().slice(0, 2000) || null,
+    updated_at: new Date().toISOString() }, { onConflict: 'user_id,period' }).select().single());
+}
+export const ODYSSEY_HINTS = [
+  ['路線一：延伸現在', '照現在的方向走下去，五年後會是什麼樣子？'],
+  ['路線二：現在走不通時', '如果現在這條路突然不能走了，你會做什麼？'],
+  ['路線三：不管錢和眼光', '如果收入和別人的看法都不重要，你想過怎樣的五年？'],
+];
 

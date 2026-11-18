@@ -27,13 +27,14 @@ const DEFAULTS = {
     status: 'todo', priority: 2, starred: false, actual_min: 0, completed_at: null, notes: null,
     project_id: null, goal_id: null, due_date: null, scheduled_start: null, estimate_min: null, updated_at: now(),
     sort_order: null, links: [], actual_sec: 0, case_no: null, work_type_id: null, board_parked: false, work_project_tag_id: null,
+    is_experiment: false, learning: null, // 20261118
   }),
   work_tags: () => ({ color: '#667085', active: true, sort: 0, kind: 'type' }), // migration 20261104；kind：20261106
   routine_phrases: () => ({ sort: 0 }),
   daily_reviews: () => ({ work_reflection: {}, work_effort: {}, work_summary: null, work_analysis: {}, mood: null, energy: null,
     identity: null, affirmation: null, milestones: null, gratitude: null }), // 20261108_manifest
   // migration 20261105_journal（Phase J）
-  period_reviews: () => ({ wins: null, lessons: null, next_focus: null, updated_at: now(), vision_identity: null, vision_senses: {} }),
+  period_reviews: () => ({ wins: null, lessons: null, next_focus: null, updated_at: now(), vision_identity: null, vision_senses: {}, gauges: {}, odyssey: [], workview: null, lifeview: null }),
   future_events: () => ({ day: null, area_id: null }),
   media_items: () => ({ creator: null, release_year: null, cover_url: null, link_url: null, status: 'want', rating: null, review: null,
     started_on: null, finished_on: null, tags: [], area_id: null, note_id: null, sort_order: null, updated_at: now() }),
@@ -51,6 +52,8 @@ const DEFAULTS = {
   feedback: () => ({ page: null, kind: 'idea', status: 'new', reply: null, updated_at: null }),
   // migration 20261112_quotes（佳句本）
   quotes: () => ({ author: null, source: null, thought: null, media_id: null, in_daily: true, updated_at: null }),
+  // migration 20261118b_life_design
+  energy_logs: () => ({ log_date: new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10), task_id: null, entry_id: null, area_id: null, engagement: null, energy: null }),
   // migration 20261114_tools（工具箱）
   // migration 20261116_health（飲食與保健）
   meal_logs: () => ({ eaten_at: null, note: null, updated_at: null }),

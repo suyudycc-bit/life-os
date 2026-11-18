@@ -2185,6 +2185,52 @@ dialog .rf-field textarea { width: 100%; resize: vertical; font-size: 16px; colo
 .rm-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 .rm-ios { margin: 8px 0 0; padding-left: 20px; font-size: 13.5px; }
 
+/* ===== AI 夥伴 20261118（docs/16）===== */
+.ova-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 0 0 4px; }
+.ova-kind { font-size: 12px; padding: 1px 6px; border: 1px solid var(--ink); border-radius: 3px; color: var(--ink); }
+.ova-sum { margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ova-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@container main (max-width: 700px) { .ova-cols { grid-template-columns: minmax(0, 1fr); } }
+.ova-list ul { margin: 4px 0 0; padding-left: 18px; font-size: 14px; }
+.ova-plan { margin-top: 8px; } .ova-plan p { white-space: pre-wrap; margin: 6px 0 0; }
+.ova-rate { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.ova-rate .on { border-color: var(--ink); font-weight: 700; }
+.ova-fb { flex: 1 1 220px; }
+.ova-grants { list-style: none; margin: 0; padding: 0; }
+.ova-grants li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.ova-grants small { display: block; }
+.consent-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.consent-wrap { width: 100%; max-width: 560px; }
+.consent-wrap h1 { font-size: 20px; margin: 0 0 10px; }
+.consent-box { background: var(--hl); border-radius: 3px; padding: 8px 12px; margin: 10px 0; font-size: 14px; }
+.consent-box ul { margin: 4px 0; padding-left: 20px; }
+.consent-form { display: flex; flex-direction: column; gap: 8px; }
+.consent-form label { display: flex; flex-direction: column; gap: 4px; }
+
+/* ===== 人生設計紀錄 20261118（docs/16 A～D）===== */
+.energy-bar { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 60; width: min(440px, calc(100% - 32px));
+  background: var(--paper-hi, #fff); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.18); padding: 10px 12px; }
+.eb-title { margin: 0 0 6px; font-size: 14px; overflow-wrap: anywhere; }
+.eb-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+.eb-row > span { width: 3em; font-size: 13px; color: var(--sub); }
+.eb-row button { flex: 1 1 0; border: 1px solid var(--line); background: transparent; border-radius: 4px; padding: 5px 4px; font: inherit; font-size: 13.5px; cursor: pointer; color: var(--ink); }
+.eb-row button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.eb-learn { display: flex; flex-direction: column; gap: 4px; font-size: 13px; margin-top: 6px; }
+.eb-learn input { width: 100%; box-sizing: border-box; }
+.eb-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+.mo-gauges { margin: 8px 0 4px; }
+.mo-gauges > .sub { margin: 0 0 4px; font-size: 13px; }
+.mo-gauge { display: grid; grid-template-columns: 3em minmax(0, 1fr) 3.5em; align-items: center; gap: 8px; padding: 2px 0; }
+.mo-gauge b { font-family: var(--f-num); text-align: right; }
+.yr-odyssey { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 8px 0; }
+@container main (max-width: 860px) { .yr-odyssey { grid-template-columns: minmax(0, 1fr); } }
+.yr-od { border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.yr-od legend { font-size: 13.5px; padding: 0 4px; }
+.yr-od input, .yr-od textarea, .yr-views textarea { width: 100%; box-sizing: border-box; }
+.yr-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container main (max-width: 700px) { .yr-views { grid-template-columns: minmax(0, 1fr); } }
+.yr-views label { display: flex; flex-direction: column; gap: 4px; }
+
 /* ===== 動態與轉場 ===== */
 /* 規範見 docs/03-ui-guidelines.md「動態規範」；換頁、數字強調由 js/motion.js 加類別。
    原則：短（≤260ms）、只動 opacity／transform、拖移中與完成動畫中的元素不套用。 */

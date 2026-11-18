@@ -182,11 +182,14 @@ export function openTaskEditor(task) {
     <label class="check"><input type="checkbox" name="starred" ${task.starred ? 'checked' : ''}> 星標（列入今日最重要的 3 件事）</label>
     <label>相關連結（一行一個）<textarea name="links" rows="2" placeholder="https://docs.google.com/...">${esc((task.links || []).join('\n'))}</textarea></label>
     <label>備註<textarea name="notes" rows="3">${esc(task.notes || '')}</textarea></label>
+    <label class="check"><input type="checkbox" name="is_experiment" ${task.is_experiment ? 'checked' : ''}> 這是一個小實驗（想驗證一個假設，例如一次訪談、一個短專案）</label>
+    <label class="te-learning" ${task.is_experiment ? '' : 'hidden'}>學到什麼<textarea name="learning" rows="2" maxlength="1000" placeholder="做完後寫一句：驗證了什麼、下一步">${esc(task.learning || '')}</textarea></label>
     <div class="dialog-actions">
       <button type="button" class="btn-ghost" value="cancel" formnovalidate>取消</button>
       <button type="submit" class="btn-primary">儲存</button>
     </div>`;
   $('button[value=cancel]', form).onclick = () => dlg.close();
+  form.is_experiment.onchange = () => { $('.te-learning', form).hidden = !form.is_experiment.checked; };
   // 任務名稱貼上帶連結的文字：文字留在名稱，網址加到「相關連結」
   form.title.addEventListener('paste', (e) => {
     const got = pastedLink(e.clipboardData);
@@ -215,6 +218,8 @@ export function openTaskEditor(task) {
       starred: f.has('starred'),
       goal_id: f.get('goal_id') || null,
       notes: f.get('notes').trim() || null,
+      is_experiment: f.has('is_experiment'), // 20261118 小實驗
+      learning: (f.get('learning') || '').trim() || null,
     };
     if (f.has('project_id')) patch.project_id = f.get('project_id') || null;
     if (!patch.title) return toast('請輸入任務名稱', true);

@@ -28,6 +28,7 @@ import { mountQuotes } from './views/quotes-book.js';
 import { mountTools } from './views/tools.js';
 import { mountHealth } from './views/health.js';
 import { openRemindDialog, registerServiceWorker } from './views/reminders.js';
+import { initEnergyPrompt } from './views/energy.js';
 import { formatClock, formatHMS } from './dates.js';
 import { pageEnter, watchStatNumbers } from './motion.js';
 import { initAccount, openForgotPassword, watchRecovery } from './account.js';
@@ -420,6 +421,7 @@ initTheme();
 document.addEventListener('lifeos:theme-changed', () => { if (loadedFor) route(); });
 $('#remind-btn').onclick = () => openRemindDialog(); // 20261117：網站推播提醒
 registerServiceWorker(); // 只處理推播，不快取檔案
+initEnergyPrompt(); // 20261118 好時光日誌：停止計時／完成時問投入與能量
 $('#feedback-btn').onclick = () => openFeedbackDialog(); // 20261111（D）：任何頁面都能寫回饋，自動帶上目前頁面
 
 // 預覽版（site/preview/，docs/15）：整頁標上「預覽版」，避免和正式版搞混；登入畫面也看得到

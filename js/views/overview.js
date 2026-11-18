@@ -39,6 +39,10 @@ export function mountOverview(root) {
         <button type="button" class="btn-ghost" id="ov-quote-copy">複製</button>
       </div>
     </figure>
+    <section class="card ov-ai" id="ov-ai" hidden aria-labelledby="ov-ai-title">
+      <div class="day-head"><h2 id="ov-ai-title">AI 洞察</h2><button type="button" class="btn-ghost" id="ov-ai-grants">管理 AI 連接</button></div>
+      <div id="ov-ai-body"></div>
+    </section>
     <section class="card ov-intent" aria-labelledby="ov-intent-title">
       <div class="day-head"><h2 id="ov-intent-title">今天的我</h2><span class="sub" id="ov-intent-save" role="status"></span></div>
       <div class="ovi-grid">
@@ -257,6 +261,66 @@ export function mountOverview(root) {
   }
   // 20261113（回饋 8362c3df）：總覽不再放「身分主線任務」；主線仍在年度手帳、專案卡片的「★主線」標記
 
+  // ===== AI 洞察（20261118，docs/16）：AI 夥伴（Claude 排程分析）寫回的最新一則；可標有用／沒用、寫一句回饋，下次分析會讀到 =====
+  let aiDay = null;
+  let aiItems = [];
+  async function loadAi() {
+    try { aiItems = await data.listInsights(3); } catch { aiItems = []; } // 還沒執行 migration 時整塊不顯示
+    renderAi();
+  }
+  function renderAi() {
+    const sec = $('#ov-ai', root);
+    const it = aiItems[0];
+    sec.hidden = !it;
+    if (!it) return;
+    const list = (title, xs) => (xs?.length ? `<div class="ova-list"><b>${title}</b><ul>${xs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
+    const period = it.period_start ? `${it.period_start.replaceAll('-', '/')}～${(it.period_end || '').replaceAll('-', '/')}` : new Date(it.created_at).toLocaleDateString('zh-TW');
+    $('#ov-ai-body', root).innerHTML = `
+      <p class="ova-head"><span class="ova-kind">${esc(data.INSIGHT_KINDS[it.kind] || 'AI 洞察')}</span><b>${esc(it.title)}</b><span class="sub">${esc(period)}</span></p>
+      <p class="ova-sum">${esc(it.summary)}</p>
+      <div class="ova-cols">${list('做得好', it.wins)}${list('要注意', it.risks)}${list('建議', it.suggestions)}</div>
+      ${it.plan ? `<details class="ova-plan"><summary>下一期優化方案</summary><p>${esc(it.plan)}</p></details>` : ''}
+      ${it.task_ids?.length ? `<p class="sub">這次新增了 ${it.task_ids.length} 件任務（標題開頭「AI｜」）。</p>` : ''}
+      <div class="ova-rate" data-id="${it.id}">
+        <button type="button" class="btn-ghost ${it.rating === 'useful' ? 'on' : ''}" data-rate="useful" aria-pressed="${it.rating === 'useful'}">👍 有用</button>
+        <button type="button" class="btn-ghost ${it.rating === 'not_useful' ? 'on' : ''}" data-rate="not_useful" aria-pressed="${it.rating === 'not_useful'}">👎 沒用</button>
+        <input class="ova-fb" maxlength="1000" placeholder="想怎麼調整？例如：多看飲食、少講工作" value="${esc(it.user_feedback || '')}" aria-label="給 AI 的回饋">
+        <button type="button" class="btn-ghost" data-fb>送出</button>
+      </div>`;
+  }
+  $('#ov-ai', root).addEventListener('click', async (e) => {
+    const wrap = e.target.closest('.ova-rate');
+    if (!wrap) return;
+    const r = e.target.closest('[data-rate]');
+    const fb = e.target.closest('[data-fb]');
+    if (!r && !fb) return;
+    try {
+      const cur = aiItems[0];
+      if (r) await data.rateInsight(wrap.dataset.id, { rating: cur.rating === r.dataset.rate ? null : r.dataset.rate });
+      if (fb) await data.rateInsight(wrap.dataset.id, { feedback: $('.ova-fb', wrap).value });
+      toast(fb ? '已送出，下次分析會照這個調整' : '已記下');
+      await loadAi();
+    } catch (err) { toast(err.message, true); }
+  });
+  $('#ov-ai-grants', root).onclick = async () => {
+    let dlg = document.querySelector('#ai-grants-dialog');
+    if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'ai-grants-dialog'; document.body.append(dlg); }
+    dlg.innerHTML = '<p class="sub">讀取中…</p>';
+    dlg.showModal();
+    const grants = await data.listAiGrants();
+    dlg.innerHTML = `<h2>已連接的 AI</h2>
+      ${grants.length ? `<ul class="ova-grants">${grants.map((g) => `<li><span><b>${esc(g.client?.name || '未命名')}</b><small class="sub">授權於 ${esc(new Date(g.granted_at).toLocaleDateString('zh-TW'))}</small></span>
+        <button type="button" class="btn-ghost danger" data-revoke="${esc(g.client?.id || g.client?.client_id || '')}">撤銷</button></li>`).join('')}</ul>`
+        : '<p class="sub">目前沒有已授權的 AI。</p>'}
+      <p class="sub">撤銷後，那個 AI 就讀不到 Life OS，排程分析也會停止，要再用得重新連接授權。</p>
+      <div class="dialog-actions"><button type="button" class="btn-ghost" data-close>關閉</button></div>`;
+    dlg.querySelector('[data-close]').onclick = () => dlg.close();
+    dlg.querySelectorAll('[data-revoke]').forEach((b) => { b.onclick = async () => {
+      if (!(await confirmDialog('撤銷這個 AI 的連接？', '撤銷'))) return;
+      try { await data.revokeAiGrant(b.dataset.revoke); toast('已撤銷'); dlg.close(); } catch (err) { toast(err.message, true); }
+    }; });
+  };
+
   // ===== 昨天沒做完（20261111 B3）：已過期的生活任務；動作用月度遷移同一套函式（data.migrateTasks），只改任務本身 =====
   const OVERDUE_SHOW = 5;
   const overdueUl = $('#ov-overdue-list', root);
@@ -384,6 +448,7 @@ export function mountOverview(root) {
     if (quoteDay !== day) { quoteDay = day; card = dailyCardOf(day, myQuotes, mediaTitleOf); showQuote(); showDaily(day); }
     if (intentDay !== day && intentLoading !== day) { intentLoading = day; loadIntent(day).finally(() => { intentLoading = null; }); }
     renderOverdue(day);
+    if (aiDay !== day) { aiDay = day; loadAi(); }
     $('#ov-guide-tip', root).hidden = tipState === 'dismissed' || !(firstVisit || state.tasks.length === 0);
     // 生活的總覽：不含工作看板的工作（工作只留在工作看板）
     const { todo, top3 } = data.todayOverview(state.life.tasks, day);

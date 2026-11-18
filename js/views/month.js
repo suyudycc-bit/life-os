@@ -66,6 +66,12 @@ export function mountMonth(root) {
         <section class="card">
           <div class="day-head"><h2>月回顧</h2><span class="sub" id="mo-save" role="status"></span></div>
           <div class="stats mo-stats" id="mo-stats"></div>
+          <div class="mo-gauges" id="mo-gauges" aria-label="這個月的四個儀表">
+            <p class="sub">這個月的四個儀表（自己感覺各滿幾成；AI 月度分析會看）</p>
+            ${data.GAUGES.map(([k, l, hint]) => `<label class="mo-gauge" title="${hint}"><span>${l}</span>
+              <input type="range" name="${k}" min="0" max="100" step="5" value="50" aria-label="${l}（${hint}）">
+              <b data-out="${k}">—</b></label>`).join('')}
+          </div>
           <form class="mo-review" id="mo-review">
             ${REVIEW_FIELDS.map(([k, l, ph]) => `<label>${l}<textarea name="${k}" rows="3" placeholder="${ph}"></textarea></label>`).join('')}
           </form>
@@ -75,6 +81,24 @@ export function mountMonth(root) {
 
   const form = $('#mo-review', root);
   const saveEl = $('#mo-save', root);
+  // 20261118 四個儀表（docs/16 B）：拉動就自動存（只寫 gauges）；還沒填過的顯示「—」
+  const gaugeBox = $('#mo-gauges', root);
+  let gaugeTimer = null;
+  let gaugeSet = {};
+  const showGauges = () => data.GAUGES.forEach(([k]) => {
+    gaugeBox.querySelector(`[data-out="${k}"]`).textContent = gaugeSet[k] == null ? '—' : `${gaugeSet[k]}%`;
+    gaugeBox.querySelector(`input[name="${k}"]`).value = gaugeSet[k] ?? 50;
+  });
+  gaugeBox.addEventListener('input', (e) => {
+    if (!e.target.name) return;
+    gaugeSet[e.target.name] = Number(e.target.value);
+    gaugeBox.querySelector(`[data-out="${e.target.name}"]`).textContent = `${e.target.value}%`;
+    clearTimeout(gaugeTimer);
+    const month = ui.month;
+    gaugeTimer = setTimeout(async () => {
+      try { await data.saveGauges(month, gaugeSet); if (month === ui.month) saveEl.textContent = '四個儀表已儲存'; } catch (err) { toast(err.message, true); }
+    }, 600);
+  });
 
   // --- 換月份：網址用 replaceState 更新（不觸發 hashchange，不重新進頁） ---
   function go(month) {
@@ -283,6 +307,8 @@ export function mountMonth(root) {
       const row = await data.getPeriodReview(month);
       if (ui.month !== month) return;
       REVIEW_FIELDS.forEach(([k]) => { form[k].value = row?.[k] || ''; });
+      gaugeSet = { ...(row?.gauges || {}) };
+      showGauges();
     } catch (e) { saveEl.textContent = `讀取失敗：${e.message}`; }
     form.querySelectorAll('textarea').forEach((x) => { x.disabled = false; });
   }

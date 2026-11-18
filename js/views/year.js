@@ -129,6 +129,21 @@ export function mountYear(root) {
           </div>
         </div>
       </section>
+      <section class="card yr-design" aria-labelledby="yr-design-h">
+        <div class="day-head"><h2 id="yr-design-h">人生設計</h2><span class="sub" data-save="d:${y}" role="status"></span></div>
+        <div data-design="${y}">
+          <p class="sub">三條五年路線都認真寫：一條延伸現在、一條現在走不通時、一條不管錢和眼光。每條一句標題、想驗證的問題。季度分析會看哪些元素在你的實際行動裡反覆出現。</p>
+          <div class="yr-odyssey">
+            ${data.ODYSSEY_HINTS.map(([t, ph], i) => `<fieldset class="yr-od"><legend>${t}</legend>
+              <input name="od${i}_title" maxlength="60" placeholder="一句標題，例如：在藥廠當 BD 主管" autocomplete="off" aria-label="${t}的標題">
+              <textarea name="od${i}_questions" rows="2" maxlength="500" placeholder="${ph}想驗證什麼？" aria-label="${t}想驗證的問題"></textarea></fieldset>`).join('')}
+          </div>
+          <div class="yr-views">
+            <label>工作觀<textarea name="workview" rows="3" maxlength="2000" placeholder="我為什麼工作？什麼樣的工作算好工作？"></textarea></label>
+            <label>人生觀<textarea name="lifeview" rows="3" maxlength="2000" placeholder="我為什麼在這裡？什麼讓人生有意義？"></textarea></label>
+          </div>
+        </div>
+      </section>
 
       <section class="card yr-annual">
         <div class="day-head"><h2>今年的年度目標</h2><span class="sub" data-count="${y}"></span></div>
@@ -234,8 +249,33 @@ export function mountYear(root) {
     // 終點身分：年度那一筆（reviews[0]）；同樣不蓋掉正在打、還沒存的字
     const vbox = root.querySelector(`[data-vision="${y}"]`);
     if (vbox && !dirty.has(`v:${y}`) && !(reviewsFor === y && vbox.contains(document.activeElement))) fillVision(vbox, reviews[0]);
+    const dbox = root.querySelector(`[data-design="${y}"]`); // 20261118 人生設計（docs/16 D）
+    if (dbox && !dirty.has(`d:${y}`) && !(reviewsFor === y && dbox.contains(document.activeElement))) fillDesign(dbox, reviews[0]);
     reviewsFor = y;
     renderAll();
+  }
+
+  function fillDesign(box, rec) {
+    const plans = Array.isArray(rec?.odyssey) ? rec.odyssey : [];
+    data.ODYSSEY_HINTS.forEach((_, i) => {
+      box.querySelector(`[name=od${i}_title]`).value = plans[i]?.title || '';
+      box.querySelector(`[name=od${i}_questions]`).value = plans[i]?.questions || '';
+    });
+    box.querySelector('[name=workview]').value = rec?.workview || '';
+    box.querySelector('[name=lifeview]').value = rec?.lifeview || '';
+  }
+  async function flushDesign(k) {
+    const year = k.slice(2);
+    const box = root.querySelector(`[data-design="${year}"]`);
+    if (!box) return;
+    const val = (n) => box.querySelector(`[name=${n}]`).value;
+    try {
+      await data.saveLifeDesign(year, {
+        odyssey: data.ODYSSEY_HINTS.map((_, i) => ({ title: val(`od${i}_title`), questions: val(`od${i}_questions`) })),
+        workview: val('workview'), lifeview: val('lifeview'),
+      });
+      setSaveText(k, `已自動儲存 ${new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })}`);
+    } catch (err) { setSaveText(k, `儲存失敗：${err.message}`); }
   }
 
   function fillVision(box, rec) {
@@ -576,6 +616,14 @@ export function mountYear(root) {
 
   // 回顧：停止輸入 0.8 秒後自動存；離開欄位時立刻存
   body.addEventListener('input', (e) => {
+    const dbox = e.target.closest('[data-design]');
+    if (dbox) {
+      const k = `d:${dbox.dataset.design}`;
+      clearTimeout(dirty.get(k));
+      dirty.set(k, setTimeout(() => flush(k), SAVE_DELAY));
+      setSaveText(k, '編輯中…');
+      return;
+    }
     const vbox = e.target.closest('[data-vision]');
     if (vbox) {
       const k = `v:${vbox.dataset.vision}`;
@@ -593,6 +641,8 @@ export function mountYear(root) {
     setSaveText(p, '編輯中…');
   });
   body.addEventListener('focusout', (e) => {
+    const dbox = e.target.closest?.('[data-design]');
+    if (dbox) { if (dirty.has(`d:${dbox.dataset.design}`)) flush(`d:${dbox.dataset.design}`); return; }
     const vbox = e.target.closest?.('[data-vision]');
     if (vbox) { if (dirty.has(`v:${vbox.dataset.vision}`)) flush(`v:${vbox.dataset.vision}`); return; }
     const box = e.target.closest?.('[data-rv]');
@@ -608,6 +658,7 @@ export function mountYear(root) {
     clearTimeout(dirty.get(p));
     dirty.delete(p);
     if (p.startsWith('v:')) return flushVision(p);
+    if (p.startsWith('d:')) return flushDesign(p);
     const box = root.querySelector(`[data-rv="${p}"]`);
     if (!box) return;
     const values = Object.fromEntries(REVIEW_FIELDS.map(([k]) => [k, box.querySelector(`[name=${k}]`).value]));
