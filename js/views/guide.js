@@ -2,8 +2,8 @@
 // 20261119（回饋 30e06bda「使用說明要隨著每次更新而更動」）：每次改到使用者看得到的功能，都要①改對應段落 ②在 CHANGES 最上面加一行
 // （CLAUDE.md 絕對規則 8；scripts/build-site.sh 發佈前會檢查 CHANGES 最新日期是否早於最近一次程式修改）。
 // 目錄不用 <a href="#id">：網址的 # 已給路由用（#/guide），所以改成按鈕捲動到該段。
-import { $ } from '../ui.js';
-import { openGoogleSyncDialog } from './google-sync.js';
+import { $ } from '../ui.js?v=202611211924';
+import { openGoogleSyncDialog } from './google-sync.js?v=202611211924';
 
 // 最近更新：新的寫最上面；[日期, 說明]。總覽的「使用說明」提示與這頁頂端都讀這份
 export const CHANGES = [

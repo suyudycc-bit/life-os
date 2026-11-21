@@ -1,11 +1,11 @@
 // M8 數據與備份（Phase 5）：匯出全部資料為 JSON；匯入前顯示筆數並二次確認，只新增、不覆蓋
-import * as data from '../data.js';
-import { reloadAll } from '../store.js';
-import { $, esc, toast, confirmDialog } from '../ui.js';
-import { isMock } from '../supabase.js';
-import { state } from '../store.js';
-import { today } from '../dates.js';
-import { convertBoardExport } from '../workboard-import.js';
+import * as data from '../data.js?v=202611211924';
+import { reloadAll } from '../store.js?v=202611211924';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611211924';
+import { isMock } from '../supabase.js?v=202611211924';
+import { state } from '../store.js?v=202611211924';
+import { today } from '../dates.js?v=202611211924';
+import { convertBoardExport } from '../workboard-import.js?v=202611211924';
 
 const LAST_EXPORT_KEY = 'lifeos-last-export';
 

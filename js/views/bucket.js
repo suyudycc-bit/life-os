@@ -1,9 +1,9 @@
 // 想做清單（Phase J）：人生想做的事——想去的地方、想學的東西、想體驗的事。
 // 資料在 bucket_items（不在 store，這頁自己讀）；排序、分類建議、拖移寫回 sort_order 都在 data.js。
-import * as data from '../data.js';
-import { state } from '../store.js';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js';
-import { today } from '../dates.js';
+import * as data from '../data.js?v=202611211924';
+import { state } from '../store.js?v=202611211924';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611211924';
+import { today } from '../dates.js?v=202611211924';
 
 const FILTER_KEY = 'lifeos-bucket-cat';
 const fmtDay = (d) => d.replaceAll('-', '/');

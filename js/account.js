@@ -1,8 +1,8 @@
 // 帳號設定：修改密碼（已登入）、忘記密碼（登入畫面）、從重設信回來後設定新密碼
 // 查證來源與 Supabase 後台設定見 docs/09「修改密碼與忘記密碼」
-import * as data from './data.js';
-import { recoveryInUrl, authUrlError } from './supabase.js';
-import { $, esc, toast } from './ui.js';
+import * as data from './data.js?v=202611211924';
+import { recoveryInUrl, authUrlError } from './supabase.js?v=202611211924';
+import { $, esc, toast } from './ui.js?v=202611211924';
 
 const dlg = () => $('#account-dialog');
 

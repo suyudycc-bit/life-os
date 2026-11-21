@@ -1,5 +1,5 @@
 // 畫面共用狀態：只快取從資料庫讀回的資料，不自行產生衍生數字
-import * as data from './data.js';
+import * as data from './data.js?v=202611211924';
 
 export const state = { areas: [], areasById: {}, tasks: [], memosByTask: {}, entries: [], running: null, summary: null,
   notes: [], habits: [], habitLogs: [], projects: [], goals: [], workTags: [],

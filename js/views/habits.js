@@ -1,10 +1,10 @@
 // M7 習慣養成（Phase 4）：新增／封存習慣、每日打卡（可補近 7 天）、連續天數、每週目標
 // 只記錄「有沒有做」，不設計病歷或診斷類欄位
-import * as data from '../data.js';
-import { state, refreshHabits } from '../store.js';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js';
-import { today, formatShort } from '../dates.js';
-import { projectOptions } from './projects.js';
+import * as data from '../data.js?v=202611211924';
+import { state, refreshHabits } from '../store.js?v=202611211924';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611211924';
+import { today, formatShort } from '../dates.js?v=202611211924';
+import { projectOptions } from './projects.js?v=202611211924';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const wd = (d) => WEEKDAYS[new Date(`${d}T12:00:00+08:00`).getUTCDay()];

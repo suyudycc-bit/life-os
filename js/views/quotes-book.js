@@ -1,10 +1,10 @@
 // 佳句本（20261112，來自回饋 8cd19a58）：記錄佳句，可掛書影單的一本；勾「放進每日一句」的會和內建句子混合出現在總覽。
 // 資料在 quotes（不在 store，這頁自己讀）；存取都在 data.js「佳句本」段，混合規則在 quotes.js。
 // 網址 #/quotes/<書影單 id> 會直接篩出那一本的佳句（書影單卡片的「佳句 n」連到這裡）。
-import * as data from '../data.js';
-import { $, esc, toast, confirmDialog } from '../ui.js';
-import { formatShort, localDate } from '../dates.js';
-import { OCR_LANGS } from '../ocr.js';
+import * as data from '../data.js?v=202611211924';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611211924';
+import { formatShort, localDate } from '../dates.js?v=202611211924';
+import { OCR_LANGS } from '../ocr.js?v=202611211924';
 
 const MEDIA_KIND = { book: '書', movie: '電影', tv: '影集', podcast: 'Podcast', course: '課程' };
 
@@ -77,7 +77,7 @@ export function mountQuotes(root) {
     if (!file) return;
     ocrBtn.disabled = true;
     try {
-      const { recognizeImage } = await import('../ocr.js');
+      const { recognizeImage } = await import('../ocr.js?v=202611211924');
       const { text, confidence, lang } = await recognizeImage(file, $('#qb-ocr-lang', root).value, (p, label) => {
         ocrStatus.textContent = `${label}… ${Math.round(p * 100)}%`;
       });

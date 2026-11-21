@@ -1,8 +1,8 @@
 // Google 日曆同步設定（Phase 5.5）與外部會議的唯讀檢視
-import * as data from '../data.js';
-import { $, esc, toast, formatDateTime } from '../ui.js';
-import { formatShort, localDate, formatTime } from '../dates.js';
-import { isMock } from '../supabase.js';
+import * as data from '../data.js?v=202611211924';
+import { $, esc, toast, formatDateTime } from '../ui.js?v=202611211924';
+import { formatShort, localDate, formatTime } from '../dates.js?v=202611211924';
+import { isMock } from '../supabase.js?v=202611211924';
 
 export const extTime = (iso) => formatTime(iso);
 

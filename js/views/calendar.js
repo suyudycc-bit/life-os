@@ -1,11 +1,11 @@
 // M3 日曆（Phase 3）：週／月視圖，任務直接讀 tasks（不另存事件），拖到別天會更新任務
-import * as data from '../data.js';
-import { state, refreshTasks } from '../store.js';
-import { $, esc, toast } from '../ui.js';
-import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js';
-import { taskItemHTML } from './task-item.js';
-import { bindTaskList, openTaskEditor } from './task-actions.js';
-import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js';
+import * as data from '../data.js?v=202611211924';
+import { state, refreshTasks } from '../store.js?v=202611211924';
+import { $, esc, toast } from '../ui.js?v=202611211924';
+import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611211924';
+import { taskItemHTML } from './task-item.js?v=202611211924';
+import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611211924';
+import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611211924';
 
 const VIEW_KEY = 'lifeos-cal-view';
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];

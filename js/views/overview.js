@@ -1,17 +1,17 @@
 // M1 總覽（Phase 1：今日完成率、今日待辦數、最重要 3 件事、今日待辦清單）
-import * as data from '../data.js';
-import { state } from '../store.js';
-import { $, durationHTML, toast, esc, areaChip, confirmDialog } from '../ui.js';
-import { refreshNotes, refreshTasks } from '../store.js';
-import { habitRowHTML, bindHabitDays } from './habits.js';
-import { openNoteDialog } from './notes.js';
-import { openExternalEvent, extTime } from './google-sync.js';
-import { today, formatShort, localDate, addDays } from '../dates.js';
-import { taskItemHTML } from './task-item.js';
-import { bindTaskList } from './task-actions.js';
-import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js';
-import { saveInboxFilter } from './inbox.js';
-import { dailyCardOf, cardPool, cardText } from '../quotes.js';
+import * as data from '../data.js?v=202611211924';
+import { state } from '../store.js?v=202611211924';
+import { $, durationHTML, toast, esc, areaChip, confirmDialog } from '../ui.js?v=202611211924';
+import { refreshNotes, refreshTasks } from '../store.js?v=202611211924';
+import { habitRowHTML, bindHabitDays } from './habits.js?v=202611211924';
+import { openNoteDialog } from './notes.js?v=202611211924';
+import { openExternalEvent, extTime } from './google-sync.js?v=202611211924';
+import { today, formatShort, localDate, addDays } from '../dates.js?v=202611211924';
+import { taskItemHTML } from './task-item.js?v=202611211924';
+import { bindTaskList } from './task-actions.js?v=202611211924';
+import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611211924';
+import { saveInboxFilter } from './inbox.js?v=202611211924';
+import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611211924';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。

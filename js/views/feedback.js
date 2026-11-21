@@ -1,8 +1,8 @@
 // 回饋匣 20261111（D）：任何頁面都能寫建議（側欄底部「回饋」按鈕），#/feedback 看全部回饋與 Claude 的回覆。
 // 資料在 feedback 表（不在 store，這頁自己讀）；新增、修改、刪除、計數都在 data.js「回饋匣」段落。
 // 沒有程式會自動讀回饋：使用者說「處理回饋」時，Claude 依 docs/15-feedback-workflow.md 處理。
-import * as data from '../data.js';
-import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js';
+import * as data from '../data.js?v=202611211924';
+import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js?v=202611211924';
 
 const FILTER_KEY = 'lifeos-feedback-tab';
 const changed = () => window.dispatchEvent(new CustomEvent('lifeos:feedback-changed'));
