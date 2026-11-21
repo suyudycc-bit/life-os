@@ -1,8 +1,8 @@
 // AI 連接授權頁（20261118，docs/16-ai-agent-plan.md）：Claude 等 MCP 用戶端要連 Life OS 時，Supabase Auth 會轉到這頁並帶 authorization_id。
 // 使用者用 Life OS 帳號登入後，看清楚是哪個用戶端、要什麼，再按「允許」或「拒絕」；結果交給 Supabase，Supabase 給出轉回用戶端的網址。
-import './frame-guard.js?v=202611220214';
-import { supabase } from './supabase.js?v=202611220214';
-import { esc } from './ui.js?v=202611220214';
+import './frame-guard.js?v=202611220224';
+import { supabase } from './supabase.js?v=202611220224';
+import { esc } from './ui.js?v=202611220224';
 
 const box = document.getElementById('consent');
 const id = new URLSearchParams(location.search).get('authorization_id');

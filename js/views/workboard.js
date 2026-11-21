@@ -1,13 +1,13 @@
 // 工作看板（Phase W2）：手帳風五欄，內容就是「工作」領域的任務（單一來源，見 docs/08）
 // 欄位由任務狀態與日期算出（data.boardColumnOf）；拖到別欄＝改狀態或排程。
 // 舊的 Apps Script 看板切換與嵌入已在 20261122 拿掉（使用者：舊看板可以刪了）。
-import * as data from '../data.js?v=202611220214';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611220214';
-import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611220214';
-import { today, formatShort, formatHMS } from '../dates.js?v=202611220214';
-import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, askSameCase } from './task-actions.js?v=202611220214';
-import { openAreaDialog } from './area-dialog.js?v=202611220214';
-import { mountCases, openPhrases } from './cases.js?v=202611220214';
+import * as data from '../data.js?v=202611220224';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611220224';
+import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611220224';
+import { today, formatShort, formatHMS } from '../dates.js?v=202611220224';
+import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, askSameCase } from './task-actions.js?v=202611220224';
+import { openAreaDialog } from './area-dialog.js?v=202611220224';
+import { mountCases, openPhrases } from './cases.js?v=202611220224';
 
 const MODE_KEY = 'lifeos-wb-mode';
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];

@@ -1,7 +1,7 @@
 // 外觀主題選擇（20261117，使用者：「想要有新皮膚，可以選擇換主題」）
 // 套用與記錄由 theme-boot.js（window.lifeosTheme）負責；這裡只做選擇視窗。只記在這台裝置，不寫資料庫。
 // 各主題的顏色、字型在 style.css 末段「外觀主題」；對照見 DESIGN.md「外觀主題」。
-import { $, esc } from './ui.js?v=202611220214';
+import { $, esc } from './ui.js?v=202611220224';
 
 export const THEME_INFO = [
   { id: 'journal', name: '手帳日頁', note: '方格紙、墨綠書布側欄、楷體（預設）', sw: ['#f6f8f5', '#173b34', '#1c2a4a'] },

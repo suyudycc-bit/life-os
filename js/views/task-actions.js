@@ -1,8 +1,8 @@
 // 任務列上的操作（完成、星標、編輯、刪除），任務管理與總覽共用
-import * as data from '../data.js?v=202611220214';
-import { state, refreshTasks } from '../store.js?v=202611220214';
-import { $, esc, toast, confirmDialog, linkify, formatDateTime, pastedLink } from '../ui.js?v=202611220214';
-import { toLocalInput, fromLocalInput, today, formatShort, localDate } from '../dates.js?v=202611220214';
+import * as data from '../data.js?v=202611220224';
+import { state, refreshTasks } from '../store.js?v=202611220224';
+import { $, esc, toast, confirmDialog, linkify, formatDateTime, pastedLink } from '../ui.js?v=202611220224';
+import { toLocalInput, fromLocalInput, today, formatShort, localDate } from '../dates.js?v=202611220224';
 
 async function run(fn, okMsg) {
   try {
@@ -141,6 +141,26 @@ function historyHTML(rows) {
     `<li>${formatShort(r.from_day)} → ${r.to_day ? formatShort(r.to_day) : '沒有日期'}${r.reason ? `・${data.RESCHEDULE_REASONS[r.reason] || ''}` : ''}<span class="sub">（${formatShort(localDate(r.created_at))} 改）</span></li>`).join('')}</ol></details>`;
 }
 
+/** 20261122 AI 改過這件任務的紀錄（MCP update_task）：只讀，打開編輯視窗後再補上 */
+const aiVal = (k, v) => {
+  if (v == null || v === '') return '（空）';
+  if (k === 'priority') return ['', '高', '中', '低'][v] || v;
+  if (k === 'status') return { todo: '待辦', doing: '進行中', done: '完成', dropped: '放棄' }[v] || v;
+  if (k === 'starred') return v ? '★' : '☆';
+  if (k === 'scheduled_start') return formatDateTime(v);
+  if (k === 'due_date') return formatShort(v);
+  return String(v);
+};
+async function fillAiEdits(box, taskId) {
+  try {
+    const rows = await data.listAiTaskEdits(taskId);
+    if (!rows.length || !box.isConnected) return;
+    box.innerHTML = `<details class="td-history"><summary>AI 改過 ${rows.length} 次</summary><ol>${rows.map((r) => `<li>${Object.entries(r.changes || {}).map(([k, [a, b]]) =>
+      `${esc(data.AI_EDIT_FIELDS[k] || k)}：${esc(aiVal(k, a))} → ${esc(aiVal(k, b))}`).join('；')}${r.reason ? `<span class="sub">・${esc(r.reason)}</span>` : ''}<span class="sub">（${esc(formatDateTime(r.created_at))}）</span></li>`).join('')}</ol></details>`;
+    box.hidden = false;
+  } catch { /* 讀不到就不顯示 */ }
+}
+
 export function openTaskEditor(task) {
   const dlg = $('#task-dialog');
   const form = $('form', dlg);
@@ -164,6 +184,7 @@ export function openTaskEditor(task) {
       <label>排程開始<input type="datetime-local" name="scheduled_start" value="${toLocalInput(task.scheduled_start)}"></label>
     </div>
     ${historyHTML(state.reschedulesByTask?.[task.id])}
+    <div class="td-ai" data-ai-edits hidden></div>
     <div class="row">
       <label>預計分鐘<input type="number" min="0" step="5" name="estimate_min" value="${task.estimate_min ?? ''}"></label>
       <label>狀態<select name="status">
@@ -239,6 +260,7 @@ export function openTaskEditor(task) {
   };
   dlg.showModal();
   $('input[name=title]', form).focus();
+  fillAiEdits($('[data-ai-edits]', form), task.id);
 }
 
 /** 任務進度 memo：一則一筆、帶時間，新的在上 */

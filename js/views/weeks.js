@@ -2,10 +2,10 @@
 // 一列＝一歲、一格＝一週（data.lifeWeekOf）。每格的內容不另存，彙整那幾天的每日復盤（心情、里程碑、感恩、收獲）
 // 與完成的生活任務；未來的格子標出目標期限與 Future Log。生日存在登入帳號（data.getLifeSettings）。
 // 數字都由 data.lifeWeeksSummary 算，這裡只顯示。
-import * as data from '../data.js?v=202611220214';
-import { state } from '../store.js?v=202611220214';
-import { $, esc, toast } from '../ui.js?v=202611220214';
-import { today, formatShort } from '../dates.js?v=202611220214';
+import * as data from '../data.js?v=202611220224';
+import { state } from '../store.js?v=202611220224';
+import { $, esc, toast } from '../ui.js?v=202611220224';
+import { today, formatShort } from '../dates.js?v=202611220224';
 
 const W = data.LIFE_WEEKS_PER_ROW;
 const range = (birth, k) => { const [a, w] = k.split('-').map(Number); return data.lifeWeekRange(birth, a, w); };

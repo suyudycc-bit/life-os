@@ -137,6 +137,8 @@ class Query {
   update(patch) { this.op = 'update'; this.payload = patch; return this; }
   delete() { this.op = 'delete'; return this; }
   eq(col, val) { this.filters.push((r) => r[col] === val); return this; }
+  neq(col, val) { this.filters.push((r) => r[col] !== val); return this; }
+  like(col, pat) { const re = new RegExp('^' + pat.split('%').map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('.*') + '$'); this.filters.push((r) => re.test(String(r[col] ?? ''))); return this; }
   gte(col, val) { this.filters.push((r) => r[col] != null && r[col] >= val); return this; }
   is(col, val) { this.filters.push((r) => (r[col] ?? null) === val); return this; }
   in(col, vals) { const set = new Set(vals); this.filters.push((r) => set.has(r[col])); return this; }

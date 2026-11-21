@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611220214';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611220214';
+import { supabase } from './supabase.js?v=202611220224';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611220224';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -1692,7 +1692,7 @@ export function yearStats({ year, tasks, entries, goals, habitLogs, media, areas
 // --- 垃圾桶：刪除前把那筆＋底下會被連帶刪除的資料＋會被取消的關聯存起來，30 天內可還原 ---
 export const TRASH_DAYS = 30;
 const TRASH_SPEC = {
-  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id', task_reschedules: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id', energy_logs: 'task_id' } },
+  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id', task_reschedules: 'task_id', ai_task_edits: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id', energy_logs: 'task_id' } },
   projects: { label: (r) => r.name, setnull: { tasks: 'project_id', goals: 'project_id', habits: 'project_id' } },
   goals: { label: (r) => r.title, setnull: { tasks: 'goal_id', habits: 'goal_id' } },
   habits: { label: (r) => r.name, cascade: { habit_logs: 'habit_id' } },
@@ -3614,3 +3614,13 @@ export function scheduleStats({ tasks, reschedules, from, to }) {
     repeat,
   };
 }
+
+// ===== AI 修改任務的紀錄（20261122，migration 20261122b_ai_task_edits.sql）=====
+// MCP 的 update_task 寫入；這裡只讀，給任務編輯視窗列出「AI 改過」。表還沒建時當作沒有。
+export const AI_EDIT_FIELDS = { title: '名稱', due_date: '到期日', scheduled_start: '排程', priority: '優先級', starred: '星號', estimate_min: '預計分鐘', status: '狀態' };
+export async function listAiTaskEdits(taskId) {
+  const res = await supabase.from('ai_task_edits').select('changes, reason, created_at').eq('task_id', taskId).order('created_at', { ascending: false }).limit(20);
+  if (res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01')) return [];
+  return must(res);
+}
+

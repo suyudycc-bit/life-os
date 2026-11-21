@@ -1,6 +1,6 @@
 // 新增領域視窗；回傳建立的領域，取消則回傳 null
-import * as data from '../data.js?v=202611220214';
-import { $, esc, toast } from '../ui.js?v=202611220214';
+import * as data from '../data.js?v=202611220224';
+import { $, esc, toast } from '../ui.js?v=202611220224';
 
 const PALETTE = ['#d64f7a', '#1f9bb0', '#7a8b2e', '#b5652b', '#5560c9', '#8f6b4a'];
 
