@@ -30,6 +30,9 @@ const MOOD_ROWS = [['mood', '心情', data.MOOD_LEVELS], ['energy', '能量', da
 const ui = { day: today() };
 
 export function mountReview(root) {
+  // 20261121：#/review/YYYY-MM-DD 直接打開那一天（人生週格點日期過來）
+  const hp = location.hash.split('/')[2];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(hp || '') && hp <= today()) ui.day = hp;
   root.innerHTML = `
     <header class="page-head cal-head">
       <h1>每日復盤</h1>

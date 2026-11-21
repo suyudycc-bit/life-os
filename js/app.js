@@ -27,6 +27,7 @@ import { mountFeedback, openFeedbackDialog } from './views/feedback.js';
 import { mountQuotes } from './views/quotes-book.js';
 import { mountTools } from './views/tools.js';
 import { mountHealth } from './views/health.js';
+import { mountWeeks } from './views/weeks.js';
 import { openRemindDialog, registerServiceWorker } from './views/reminders.js';
 import { initEnergyPrompt } from './views/energy.js';
 import { formatClock, formatHMS } from './dates.js';
@@ -43,6 +44,8 @@ const ICONS = {
   calendar: '<path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/><path d="M9 14.5h.01M13 14.5h.01M9 17.5h.01"/>',
   // 年度手帳：3×3 的格子＝Year in Pixels
   year: '<path d="M4 4h16v16H4z"/><path d="M8 8h.01M12 8h.01M16 8h.01M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>',
+  // 人生週格：一排一排的小方格（一列＝一歲）
+  weeks: '<path d="M4 5h3v3H4zM10.5 5h3v3h-3zM17 5h3v3h-3zM4 10.5h3v3H4zM10.5 10.5h3v3h-3z"/><path d="M17 12h3M4 17.5h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01M20 17.5h.01"/>',
   stats: '<path d="M12 4a8 8 0 1 0 8 8h-8z"/><path d="M15 3.5A6 6 0 0 1 20.5 9H15z"/>',
   review: '<path d="M5 19.5 6 15 16.5 4.5a2 2 0 0 1 3 3L9 18z"/><path d="M14.5 6.5l3 3"/>',
   // 收件匣（畫面上叫「待看清單」）：托盤＋往下的箭頭（分享進來）
@@ -82,6 +85,7 @@ const ROUTES = [
   { id: 'month', label: '月度手帳', mount: mountMonth, group: '計畫' },
   { id: 'year', label: '年度手帳', mount: mountYear, group: '計畫' },
   { id: 'review', label: '每日復盤', mount: mountReview, group: '回顧' },
+  { id: 'weeks', label: '人生週格', mount: mountWeeks, group: '回顧' }, // 20261121 人生週記的概念（只看、不另外寫）
   { id: 'stats', label: '時間統計', mount: mountStats, group: '回顧' },
   { id: 'habits', label: '習慣養成', mount: mountHabits, group: '回顧' },
   { id: 'health', label: '飲食與保健', mount: mountHealth, group: '回顧' }, // 20261116 來自回饋

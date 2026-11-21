@@ -28,6 +28,7 @@ export function mountOverview(root) {
     <header class="page-head">
       <h1>今天，也好好生活。</h1>
       <p class="sub" id="ov-date"></p>
+      <a class="sub ov-lifeweek" id="ov-lifeweek" href="#/weeks" hidden></a>
     </header>
     <figure class="ov-quote" id="ov-quote" aria-labelledby="ov-quote-label">
       <figcaption class="ovq-label" id="ov-quote-label">每日一句</figcaption>
@@ -453,8 +454,27 @@ export function mountOverview(root) {
     noteForm.reset();
   };
 
+  // 20261121 人生週格：每次進總覽讀一次（生日沒設就不顯示）；這週還沒寫復盤時提醒
+  let lifeWeekFor = null;
+  async function loadLifeWeek(day) {
+    const el = $('#ov-lifeweek', root);
+    try {
+      const st = await data.getLifeSettings();
+      if (!st.birth_date) { el.hidden = true; return; }
+      const now = data.lifeWeekOf(st.birth_date, day);
+      const r = data.lifeWeekRange(st.birth_date, now.age, now.week);
+      const rows = await data.listReviewsSince(r.start);
+      const wrote = rows.filter((x) => x.review_date <= day && data.REVIEW_NOTE_KEYS.some((k) => x[k]?.trim())).length;
+      const n = now.age * data.LIFE_WEEKS_PER_ROW + now.week + 1;
+      el.textContent = `人生第 ${n.toLocaleString()} 週・${wrote ? `這週寫了 ${wrote} 天復盤` : '這週還沒寫復盤'} ›`;
+      el.classList.toggle('warn', !wrote);
+      el.hidden = false;
+    } catch { el.hidden = true; }
+  }
+
   return function render() {
     const day = today();
+    if (lifeWeekFor !== day) { lifeWeekFor = day; loadLifeWeek(day); }
     if (quoteDay !== day) { quoteDay = day; card = dailyCardOf(day, myQuotes, mediaTitleOf); showQuote(); showDaily(day); }
     if (intentDay !== day && intentLoading !== day) { intentLoading = day; loadIntent(day).finally(() => { intentLoading = null; }); }
     renderOverdue(day);

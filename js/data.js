@@ -3382,3 +3382,116 @@ export const ODYSSEY_HINTS = [
   ['路線三：不管錢和眼光', '如果收入和別人的看法都不重要，你想過怎樣的五年？'],
 ];
 
+
+// ===== 人生週格（20261121，使用者要求把「人生週記」的概念補進來，但「不要越寫越多地方」）=====
+// 一列＝一歲（從那年生日起算），一格＝一週，每列 52 格；第 52 格包含到下次生日前多出來的 1～2 天。
+// 不另存紀錄：每格的內容即時彙整那幾天的 daily_reviews（心情、里程碑、感恩、收獲）與完成的生活任務；
+// 未來的格子標出目標期限與 Future Log。生日與想看到幾歲存在登入帳號的 user_metadata（跨裝置、不開新表）。
+export const LIFE_YEARS_DEFAULT = 85;
+export const LIFE_WEEKS_PER_ROW = 52;
+const isYmd = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+
+export async function getLifeSettings() {
+  const m = (await getSession())?.user?.user_metadata || {};
+  const years = Number(m.life_years);
+  return {
+    birth_date: isYmd(m.birth_date) ? m.birth_date : null,
+    life_years: Number.isInteger(years) && years >= 50 && years <= 120 ? years : LIFE_YEARS_DEFAULT,
+  };
+}
+
+export async function saveLifeSettings({ birth_date, life_years }) {
+  const years = Number(life_years) || LIFE_YEARS_DEFAULT;
+  if (!isYmd(birth_date) || birth_date < '1900-01-01' || birth_date > today()) throw new Error('請填正確的生日');
+  if (!Number.isInteger(years) || years < 50 || years > 120) throw new Error('想看到的歲數請填 50～120');
+  if (daysBetween(birth_date, today()) >= years * 365.25) throw new Error('想看到的歲數要比現在的年紀大');
+  const { error } = await supabase.auth.updateUser({ data: { birth_date, life_years: years } });
+  if (error) throw new Error(error.message);
+  return { birth_date, life_years: years };
+}
+
+/** 第 age 歲那年的生日（2/29 出生的人在平年用 3/1） */
+export function lifeBirthday(birth, age) {
+  const [y, m, d] = birth.split('-').map(Number);
+  return new Date(Date.UTC(y + age, m - 1, d)).toISOString().slice(0, 10);
+}
+
+/** 某天落在第幾歲、那一列的第幾格（0 起算）；生日以前回 null */
+export function lifeWeekOf(birth, day) {
+  if (!birth || day < birth) return null;
+  let age = Number(day.slice(0, 4)) - Number(birth.slice(0, 4));
+  while (age > 0 && lifeBirthday(birth, age) > day) age--;
+  while (lifeBirthday(birth, age + 1) <= day) age++;
+  const week = Math.min(LIFE_WEEKS_PER_ROW - 1, Math.floor(daysBetween(lifeBirthday(birth, age), day) / 7));
+  return { age, week, key: `${age}-${week}` };
+}
+
+/** 一格的日期範圍 { start, end }（含頭尾） */
+export function lifeWeekRange(birth, age, week) {
+  const start = addDays(lifeBirthday(birth, age), week * 7);
+  const end = week === LIFE_WEEKS_PER_ROW - 1 ? addDays(lifeBirthday(birth, age + 1), -1) : addDays(start, 6);
+  return { start, end };
+}
+
+/** 生日以來的復盤（只讀；每日復盤寫的就是這一份） */
+export async function listReviewsSince(day) {
+  return must(await supabase.from('daily_reviews').select('*').gte('review_date', day).order('review_date'));
+}
+/** 某個月以後的 Future Log */
+export async function listFutureEventsFrom(month) {
+  return must(await supabase.from('future_events').select('*').gte('month', month).order('month').order('day'));
+}
+
+const firstLine = (s) => String(s || '').trim();
+
+/**
+ * 彙整成每一格的內容（純函式；UI 只顯示）。
+ * @returns {{ cells: Map<string, object>, now: object, lived: number, total: number, remaining: number, logged: number }}
+ *   cells 的值：{ days（有寫復盤的天數）, mood（平均，一位小數；沒填為 null）, milestones, gratitude, gains（[{day, text}]）,
+ *   done（完成的生活任務數）, marks（未來的目標期限／Future Log：[{day, title, kind}]） }
+ */
+export function lifeWeeksSummary(birth, lifeYears, { reviews = [], tasks = [], goals = [], futureEvents = [], areaIds = null, day = today() } = {}) {
+  const cells = new Map();
+  const cell = (d) => {
+    const w = lifeWeekOf(birth, d);
+    if (!w || w.age >= lifeYears) return null;
+    if (!cells.has(w.key)) cells.set(w.key, { days: 0, moodSum: 0, moodN: 0, milestones: [], gratitude: [], gains: [], done: 0, marks: [] });
+    return cells.get(w.key);
+  };
+  for (const r of reviews) {
+    if (r.review_date > day) continue;
+    const c = cell(r.review_date);
+    if (!c) continue;
+    const wrote = REVIEW_NOTE_KEYS.some((k) => firstLine(r[k]));
+    if (wrote) c.days++;
+    if (r.mood >= 1 && r.mood <= 5) { c.moodSum += r.mood; c.moodN++; }
+    for (const k of ['milestones', 'gratitude', 'gains']) if (firstLine(r[k])) c[k].push({ day: r.review_date, text: firstLine(r[k]) });
+  }
+  for (const t of tasks) {
+    if (t.status !== 'done' || !t.completed_at) continue;
+    if (areaIds && !areaIds.has(t.area_id)) continue;
+    const c = cell(localDate(t.completed_at));
+    if (c) c.done++;
+  }
+  for (const g of goals) {
+    if (!g.due_date || g.due_date <= day || g.status === 'dropped' || g.status === 'done') continue;
+    if (areaIds && g.area_id && !areaIds.has(g.area_id)) continue;
+    cell(g.due_date)?.marks.push({ day: g.due_date, title: g.title, kind: 'goal' });
+  }
+  for (const e of futureEvents) {
+    const d = `${e.month}-${String(e.day || 1).padStart(2, '0')}`;
+    if (!isYmd(d) || d <= day) continue;
+    cell(d)?.marks.push({ day: e.day ? d : null, month: e.month, title: e.title, kind: 'event' });
+  }
+  let logged = 0;
+  for (const c of cells.values()) {
+    c.mood = c.moodN ? Math.round((c.moodSum / c.moodN) * 10) / 10 : null;
+    delete c.moodSum; delete c.moodN;
+    if (c.days || c.mood != null) logged++;
+    c.marks.sort((a, b) => String(a.day || a.month).localeCompare(String(b.day || b.month)));
+  }
+  const now = lifeWeekOf(birth, day);
+  const total = lifeYears * LIFE_WEEKS_PER_ROW;
+  const lived = now ? now.age * LIFE_WEEKS_PER_ROW + now.week : 0; // 已經過完的格數（不含本週）
+  return { cells, now, lived, total, remaining: Math.max(0, total - lived - 1), logged };
+}

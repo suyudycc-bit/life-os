@@ -2442,3 +2442,47 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .guide-changes li { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 10px; padding: 6px 0; border-top: 1px dashed var(--line); }
 .guide-changes li:first-child { border-top: 0; }
 .guide-changes time { font-family: var(--f-num); color: var(--sub); font-variant-numeric: tabular-nums; }
+
+/* ===== 人生週格（20261121，#/weeks）：一列＝一歲、一格＝一週 ===== */
+.lw-setup { max-width: 520px; }
+.lw-form { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.lw-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--sub); }
+.lw-banner { display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; border-left: 3px solid var(--danger); }
+.lw-banner.ok { border-left-color: var(--ok); }
+.lw-banner p { margin: 0; flex: 1 1 260px; }
+.lw-stats .stat-note { font-variant-numeric: tabular-nums; }
+.lw-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--sub); margin-bottom: 12px; }
+.lw-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.lw-legend .lw-c { width: 10px; height: 10px; flex: none; }
+.lw-grid { display: grid; grid-template-columns: 22px repeat(52, minmax(0, 1fr)); gap: 2px; max-width: 980px; }
+.lw-age { font-family: var(--f-num); font-size: 11px; line-height: 1; color: var(--sub); text-align: right; padding-right: 4px; align-self: center; }
+.lw-age.cur { color: var(--danger); font-weight: 600; }
+.lw-c { display: block; aspect-ratio: 1; border-radius: 1.5px; cursor: pointer; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+/* 過去沒紀錄的週：退到背景，讓有紀錄的週和這週跳出來 */
+.lw-c.past { background: color-mix(in srgb, var(--mute) 30%, transparent); box-shadow: none; }
+.lw-c.wrote { background: color-mix(in srgb, var(--ink) 55%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 35%, transparent); }
+.lw-c.wrote.m1, .lw-c.now.m1 { background: var(--mood-1); } .lw-c.wrote.m2, .lw-c.now.m2 { background: var(--mood-2); }
+.lw-c.wrote.m3, .lw-c.now.m3 { background: var(--mood-3); } .lw-c.wrote.m4, .lw-c.now.m4 { background: var(--mood-4); }
+.lw-c.wrote.m5, .lw-c.now.m5 { background: var(--mood-5); }
+.lw-c.now { box-shadow: 0 0 0 1.5px var(--danger); position: relative; z-index: 1; }
+.lw-c.future { opacity: .55; }
+.lw-c.future.mark { opacity: 1; box-shadow: inset 0 0 0 1.5px var(--ink); background: color-mix(in srgb, var(--hl) 70%, transparent); }
+.lw-c:hover { outline: 1.5px solid var(--ink); outline-offset: 0; }
+.lw-dlg { display: flex; flex-direction: column; gap: 10px; }
+.lw-facts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lw-facts .sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+.lw-sec h3 { margin: 4px 0; font-size: 15px; color: var(--ink); }
+.lw-sec ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.lw-sec li { display: flex; gap: 10px; align-items: baseline; white-space: pre-line; }
+.lw-day { font-family: var(--f-num); color: var(--sub); flex: none; min-width: 34px; font-variant-numeric: tabular-nums; }
+.lw-page { min-height: 340px; }
+.lw-run { font-size: 12px; letter-spacing: .12em; color: var(--sub); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.lw-turn { display: flex; align-items: center; justify-content: space-between; margin-top: auto; gap: 8px; }
+.lw-folio { font-family: var(--f-num); color: var(--sub); font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .lw-grid { grid-template-columns: 16px repeat(52, minmax(0, 1fr)); gap: 1px; }
+  .lw-age { font-size: 9px; padding-right: 2px; }
+  .lw-c { border-radius: 1px; }
+}
+.ov-lifeweek { display: inline-block; text-decoration: none; }
+.ov-lifeweek:hover { text-decoration: underline; }

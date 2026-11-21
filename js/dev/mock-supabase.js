@@ -377,7 +377,7 @@ export function createMockClient() {
       async signInWithPassword({ email, password }) {
         const u = load().users[email];
         if (!u || u.password !== password) return { data: null, error: { message: 'Invalid login credentials' } };
-        const session = { user: { id: u.id, email } };
+        const session = { user: { id: u.id, email, user_metadata: u.meta || {} } };
         setSess(session);
         return { data: { session }, error: null };
       },
@@ -392,7 +392,7 @@ export function createMockClient() {
       async signOut() { setSess(null); try { sessionStorage.setItem(SIGNED_OUT_KEY, '1'); } catch { /* 忽略 */ } return { error: null }; },
       // 照 supabase-js／Supabase Auth 的行為：沒登入回 Auth session missing!；
       // 新密碼少於 6 碼或與舊密碼相同時回錯誤；成功發出 USER_UPDATED
-      async updateUser({ password } = {}) {
+      async updateUser({ password, data: meta } = {}) {
         const sess = getSess();
         if (!sess) return { data: { user: null }, error: { message: 'Auth session missing!' } };
         const db = load();
@@ -406,6 +406,12 @@ export function createMockClient() {
             return { data: { user: null }, error: { message: 'New password should be different from the old password.' } };
           }
           u.password = password;
+        }
+        // 20261121 人生週格：user_metadata 照 Supabase 的行為合併（不是整個取代），並更新目前的 session
+        if (meta && typeof meta === 'object') {
+          u.meta = { ...(u.meta || {}), ...meta };
+          sess.user = { ...sess.user, user_metadata: u.meta };
+          setSess(sess);
         }
         save(db);
         listeners.forEach((cb) => cb('USER_UPDATED', sess));
