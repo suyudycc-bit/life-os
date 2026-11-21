@@ -1,21 +1,34 @@
 // 飲食與保健（20261116，來自回饋 ec337946）：每天的飲食紀錄＋保健食品打勾，下方是近 7 天統計。
 // 資料在 meal_logs、supplements、supplement_logs（不在 store，這頁自己讀）；存取與統計都在 data.js「飲食與保健」段。
-import * as data from '../data.js?v=202611212008';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212008';
-import { today, addDays, formatShort } from '../dates.js?v=202611212008';
+import * as data from '../data.js?v=202611212021';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212021';
+import { today, addDays, formatShort } from '../dates.js?v=202611212021';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const dow = (d) => new Date(`${d}T00:00:00`).getDay();
 
 export function mountHealth(root) {
-  const ui = { day: today() };
+  buildHealth(root, { page: true });
+  return () => {}; // 資料不在 store；新增／修改後自己重讀
+}
+
+/**
+ * 20261121（使用者：點日曆的一天就能把那天的事做完）：日曆的當日區塊嵌入同一套飲食＋保健食品（不另寫一份）。
+ * 回傳 { setDay(day) }；同一天重複呼叫不會重讀。
+ */
+export function mountHealthDay(el, day) {
+  return buildHealth(el, { page: false, day });
+}
+
+function buildHealth(root, { page, day = today() }) {
+  const ui = { day };
   let meals = [];
   let supps = [];
   let logs = [];
   let weekMeals = [];
   let loaded = false;
 
-  root.innerHTML = `
+  root.innerHTML = `${page ? `
     <header class="page-head hl-head">
       <div><h1>飲食與保健</h1><p class="sub" id="hl-date"></p></div>
       <div class="hl-nav">
@@ -24,7 +37,7 @@ export function mountHealth(root) {
         <button type="button" class="btn-ghost" id="hl-next" aria-label="後一天">›</button>
         <button type="button" class="btn-ghost" id="hl-today">今天</button>
       </div>
-    </header>
+    </header>` : ''}
     <div class="hl-grid">
       <section class="card">
         <div class="day-head"><h2>飲食</h2><span class="sub" id="hl-meal-n"></span></div>
@@ -41,20 +54,22 @@ export function mountHealth(root) {
         <div class="day-head"><h2>保健食品 <span class="sub" id="hl-supp-n"></span></h2><button type="button" class="btn-ghost" id="hl-supp-new">＋ 新增保健食品</button></div>
         <div id="hl-supps"></div>
       </section>
-    </div>
+    </div>${page ? `
     <section class="card">
       <div class="day-head"><h2>近 7 天</h2><span class="sub">到這一天為止</span></div>
       <div id="hl-week"></div>
-    </section>`;
+    </section>` : ''}`;
 
   const form = $('#hl-add', root);
   form.meal.value = data.guessMeal();
 
   const go = (d) => { ui.day = d; load(); };
-  $('#hl-prev', root).onclick = () => go(addDays(ui.day, -1));
-  $('#hl-next', root).onclick = () => go(addDays(ui.day, 1));
-  $('#hl-today', root).onclick = () => go(today());
-  $('#hl-day', root).onchange = (e) => { if (e.target.value) go(e.target.value); };
+  if (page) {
+    $('#hl-prev', root).onclick = () => go(addDays(ui.day, -1));
+    $('#hl-next', root).onclick = () => go(addDays(ui.day, 1));
+    $('#hl-today', root).onclick = () => go(today());
+    $('#hl-day', root).onchange = (e) => { if (e.target.value) go(e.target.value); };
+  }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -183,8 +198,10 @@ export function mountHealth(root) {
 
   function render() {
     const d = ui.day;
-    $('#hl-day', root).value = d;
-    $('#hl-date', root).textContent = `${formatShort(d)}（週${WEEK[dow(d)]}）${d === today() ? '・今天' : ''}`;
+    if (page) {
+      $('#hl-day', root).value = d;
+      $('#hl-date', root).textContent = `${formatShort(d)}（週${WEEK[dow(d)]}）${d === today() ? '・今天' : ''}`;
+    }
     if (!loaded) { $('#hl-meals', root).innerHTML = '<p class="sub">載入中…</p>'; return; }
     // 飲食
     const by = data.mealsByType(meals);
@@ -215,6 +232,7 @@ export function mountHealth(root) {
       : '<p class="empty">還沒有保健食品。按右上「＋ 新增保健食品」設定名稱和什麼時候吃，之後每天在這裡打勾。</p>';
     const off = supps.filter((s) => !s.active);
     if (off.length) $('#hl-supps', root).insertAdjacentHTML('beforeend', `<p class="sub hl-off">已停用：${off.map((s) => `<button type="button" class="hl-link" data-supp-edit="${s.id}">${esc(s.name)}</button>`).join('、')}</p>`);
+    if (!page) return;
     // 近 7 天
     const st = data.healthStats(supps, logs, weekMeals, d, 7);
     $('#hl-week', root).innerHTML = `
@@ -243,5 +261,5 @@ export function mountHealth(root) {
     render();
   }
   load();
-  return () => {}; // 資料不在 store；新增／修改後自己重讀
+  return { setDay: (d) => { if (d !== ui.day) go(d); } };
 }

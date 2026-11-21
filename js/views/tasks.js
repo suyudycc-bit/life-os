@@ -1,17 +1,17 @@
 // M2 任務管理（Phase 1：建立、列表、篩選、星標、編輯、刪除、完成；計時於 Phase 2）
-import * as data from '../data.js?v=202611212008';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212008';
-import { $, esc, toast, PRIORITY } from '../ui.js?v=202611212008';
-import { today } from '../dates.js?v=202611212008';
-import { taskItemHTML } from './task-item.js?v=202611212008';
-import { bindTaskList } from './task-actions.js?v=202611212008';
-import { openAreaDialog } from './area-dialog.js?v=202611212008';
+import * as data from '../data.js?v=202611212021';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212021';
+import { $, esc, toast, PRIORITY } from '../ui.js?v=202611212021';
+import { today } from '../dates.js?v=202611212021';
+import { taskItemHTML } from './task-item.js?v=202611212021';
+import { bindTaskList } from './task-actions.js?v=202611212021';
+import { openAreaDialog } from './area-dialog.js?v=202611212021';
 
 const ADD_AREA = '__add__';
 
 const FILTER_KEY = 'lifeos-task-filter';
-const filter = { range: 'all', areaId: '', priority: '', showDone: false };
-try { Object.assign(filter, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}')); } catch { /* 忽略 */ }
+const filter = { range: 'all', areaId: '', priority: '', showDone: false, group: true, q: '' };
+try { Object.assign(filter, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}'), { q: '' }); } catch { /* 忽略 */ }
 
 export function mountTasks(root) {
   root.innerHTML = `
@@ -38,8 +38,10 @@ export function mountTasks(root) {
           ${[1, 2, 3].map((p) => `<option value="${p}">${PRIORITY[p]}優先</option>`).join('')}
         </select>
         <label class="check"><input type="checkbox" id="f-done"> 顯示已完成</label>
+        <label class="check"><input type="checkbox" id="f-group"> 依日期分組</label>
+        <input type="search" id="f-q" class="f-q" placeholder="搜尋任務名稱" aria-label="搜尋任務名稱" autocomplete="off">
       </div>
-      <ul class="task-list" id="task-list"></ul>
+      <div id="task-list"></div>
     </section>`;
 
   const form = $('#quick-add', root);
@@ -85,13 +87,16 @@ export function mountTasks(root) {
   $('#f-area', root).onchange = (e) => setFilter({ areaId: e.target.value });
   $('#f-priority', root).onchange = (e) => setFilter({ priority: e.target.value });
   $('#f-done', root).onchange = (e) => setFilter({ showDone: e.target.checked });
+  $('#f-group', root).onchange = (e) => setFilter({ group: e.target.checked });
+  $('#f-q', root).oninput = (e) => setFilter({ q: e.target.value.trim() });
+  // 20261121：清單可能分成好幾組（每組一個 ul），事件都掛在外層；拖移只在同一組內
   const ul = $('#task-list', root);
   bindTaskList(ul, { animateDone: () => !filter.showDone });
   enableReorder(ul);
 
   function setFilter(patch) {
     Object.assign(filter, patch);
-    try { localStorage.setItem(FILTER_KEY, JSON.stringify(filter)); } catch { /* 忽略 */ }
+    try { localStorage.setItem(FILTER_KEY, JSON.stringify({ ...filter, q: '' })); } catch { /* 忽略 */ } // 搜尋字不記（下次進來不會莫名少一堆任務）
     render();
   }
 
@@ -111,14 +116,20 @@ export function mountTasks(root) {
     fa.value = filter.areaId;
     $('#f-priority', root).value = filter.priority;
     $('#f-done', root).checked = filter.showDone;
+    $('#f-group', root).checked = filter.group;
     root.querySelectorAll('#f-range button').forEach((b) => {
       b.setAttribute('aria-pressed', String(b.dataset.v === filter.range));
     });
 
     const list = data.filterTasks(state.life.tasks, filter);
-    $('#task-list', root).innerHTML = list.length
-      ? list.map((t) => taskItemHTML(t, state.areasById, { draggable: true, memos: state.memosByTask[t.id], running: state.running })).join('')
-      : `<li class="empty">${state.life.tasks.length ? '這個篩選條件下沒有任務，換個條件看看。' : '還沒有任務。在上方輸入第一件要做的事吧！'}</li>`;
+    const items = (ts) => ts.map((t) => taskItemHTML(t, state.areasById, { draggable: true, memos: state.memosByTask[t.id], running: state.running })).join('');
+    const empty = filter.q ? `找不到名稱有「${esc(filter.q)}」的任務。`
+      : state.life.tasks.length ? '這個篩選條件下沒有任務，換個條件看看。' : '還沒有任務。在上方輸入第一件要做的事吧！';
+    $('#task-list', root).innerHTML = !list.length ? `<ul class="task-list"><li class="empty">${empty}</li></ul>`
+      : filter.group ? data.taskDateGroups(list).map((g) => `
+        <section class="tl-group tl-${g.key}"><h3>${g.label}<span class="sub">${g.tasks.length}</span></h3>
+          <ul class="task-list">${items(g.tasks)}</ul></section>`).join('')
+      : `<ul class="task-list">${items(list)}</ul>`;
   }
 
   return render;

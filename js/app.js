@@ -1,39 +1,39 @@
-import './frame-guard.js?v=202611212008'; // 資安 20261111（C）：被別的網站用 iframe 嵌入時不載入（必須排第一個）
-import { supabase, isMock, isLocalDevHost } from './supabase.js?v=202611212008';
-import * as data from './data.js?v=202611212008';
-import { state, loadAll, refreshTasks, subscribe, reset } from './store.js?v=202611212008';
-import { $, esc, toast, setNavBadge, isPreviewPath } from './ui.js?v=202611212008';
+import './frame-guard.js?v=202611212021'; // 資安 20261111（C）：被別的網站用 iframe 嵌入時不載入（必須排第一個）
+import { supabase, isMock, isLocalDevHost } from './supabase.js?v=202611212021';
+import * as data from './data.js?v=202611212021';
+import { state, loadAll, refreshTasks, subscribe, reset } from './store.js?v=202611212021';
+import { $, esc, toast, setNavBadge, isPreviewPath } from './ui.js?v=202611212021';
 export { setNavBadge }; // 20261106：其他模組也可以從 ui.js 直接 import
-import { mountOverview } from './views/overview.js?v=202611212008';
-import { mountTasks } from './views/tasks.js?v=202611212008';
-import { mountStats } from './views/stats.js?v=202611212008';
-import { mountCalendar } from './views/calendar.js?v=202611212008';
-import { mountReview } from './views/review.js?v=202611212008';
-import { mountNotes } from './views/notes.js?v=202611212008';
-import { mountMedia } from './views/media.js?v=202611212008';
-import { mountHabits } from './views/habits.js?v=202611212008';
-import { mountProjects } from './views/projects.js?v=202611212008';
-import { mountBackup } from './views/backup.js?v=202611212008';
-import { mountWorkBoard } from './views/workboard.js?v=202611212008';
-import { mountGuide } from './views/guide.js?v=202611212008';
-import { mountMonth } from './views/month.js?v=202611212008';
-import { mountBucket } from './views/bucket.js?v=202611212008';
-import { mountYear } from './views/year.js?v=202611212008';
-import { mountContacts } from './views/contacts.js?v=202611212008';
-import { mountInbox } from './views/inbox.js?v=202611212008';
-import { mountTags } from './views/tags.js?v=202611212008';
-import { mountReflect } from './views/reflect.js?v=202611212008';
-import { mountFeedback, openFeedbackDialog } from './views/feedback.js?v=202611212008';
-import { mountQuotes } from './views/quotes-book.js?v=202611212008';
-import { mountTools } from './views/tools.js?v=202611212008';
-import { mountHealth } from './views/health.js?v=202611212008';
-import { mountWeeks } from './views/weeks.js?v=202611212008';
-import { openRemindDialog, registerServiceWorker } from './views/reminders.js?v=202611212008';
-import { initEnergyPrompt } from './views/energy.js?v=202611212008';
-import { formatClock, formatHMS } from './dates.js?v=202611212008';
-import { pageEnter, watchStatNumbers } from './motion.js?v=202611212008';
-import { initAccount, openForgotPassword, watchRecovery } from './account.js?v=202611212008';
-import { initTheme } from './theme.js?v=202611212008';
+import { mountOverview } from './views/overview.js?v=202611212021';
+import { mountTasks } from './views/tasks.js?v=202611212021';
+import { mountStats } from './views/stats.js?v=202611212021';
+import { mountCalendar } from './views/calendar.js?v=202611212021';
+import { mountReview } from './views/review.js?v=202611212021';
+import { mountNotes } from './views/notes.js?v=202611212021';
+import { mountMedia } from './views/media.js?v=202611212021';
+import { mountHabits } from './views/habits.js?v=202611212021';
+import { mountProjects } from './views/projects.js?v=202611212021';
+import { mountBackup } from './views/backup.js?v=202611212021';
+import { mountWorkBoard } from './views/workboard.js?v=202611212021';
+import { mountGuide } from './views/guide.js?v=202611212021';
+import { mountMonth } from './views/month.js?v=202611212021';
+import { mountBucket } from './views/bucket.js?v=202611212021';
+import { mountYear } from './views/year.js?v=202611212021';
+import { mountContacts } from './views/contacts.js?v=202611212021';
+import { mountInbox } from './views/inbox.js?v=202611212021';
+import { mountTags } from './views/tags.js?v=202611212021';
+import { mountReflect } from './views/reflect.js?v=202611212021';
+import { mountFeedback, openFeedbackDialog } from './views/feedback.js?v=202611212021';
+import { mountQuotes } from './views/quotes-book.js?v=202611212021';
+import { mountTools } from './views/tools.js?v=202611212021';
+import { mountHealth } from './views/health.js?v=202611212021';
+import { mountWeeks } from './views/weeks.js?v=202611212021';
+import { openRemindDialog, registerServiceWorker } from './views/reminders.js?v=202611212021';
+import { initEnergyPrompt } from './views/energy.js?v=202611212021';
+import { formatClock, formatHMS } from './dates.js?v=202611212021';
+import { pageEnter, watchStatNumbers } from './motion.js?v=202611212021';
+import { initAccount, openForgotPassword, watchRecovery } from './account.js?v=202611212021';
+import { initTheme } from './theme.js?v=202611212021';
 
 // 左側選單 8 項（docs/00）；尚未實作的模組標示預計 Phase
 // 選單圖示：24×24、1.6 筆畫的線條圖（樣式見 .icon）
@@ -334,7 +334,7 @@ async function showApp(session) {
     await loadAll();
     if (stale()) return;
     if (isMock) {
-      const { seedDemoTasks } = await import('./dev/mock-supabase.js?v=202611212008');
+      const { seedDemoTasks } = await import('./dev/mock-supabase.js?v=202611212021');
       await seedDemoTasks(supabase, state.areas);
       await refreshTasks();
     }

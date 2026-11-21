@@ -1,11 +1,14 @@
 // M3 日曆（Phase 3）：週／月視圖，任務直接讀 tasks（不另存事件），拖到別天會更新任務
-import * as data from '../data.js?v=202611212008';
-import { state, refreshTasks } from '../store.js?v=202611212008';
-import { $, esc, toast } from '../ui.js?v=202611212008';
-import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611212008';
-import { taskItemHTML } from './task-item.js?v=202611212008';
-import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611212008';
-import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611212008';
+import * as data from '../data.js?v=202611212021';
+import { state, refreshTasks } from '../store.js?v=202611212021';
+import { $, esc, toast, areaChip, foldList } from '../ui.js?v=202611212021';
+import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611212021';
+import { taskItemHTML } from './task-item.js?v=202611212021';
+import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611212021';
+import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611212021';
+import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611212021';
+import { bindHabitDays } from './habits.js?v=202611212021';
+import { mountHealthDay } from './health.js?v=202611212021';
 
 const VIEW_KEY = 'lifeos-cal-view';
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -54,12 +57,26 @@ export function mountCalendar(root) {
         <input type="time" name="time" aria-label="排程時間（可留白）">
         <button class="btn-primary">建立</button>
       </form>
+      <div id="cal-overdue-wrap" class="cal-overdue" hidden>
+        <h3 id="cal-overdue-title"></h3>
+        <ul class="task-list" id="cal-overdue"></ul>
+      </div>
+      <h3 class="cal-sub" id="cal-day-sub" hidden>這天的任務</h3>
       <ul class="task-list" id="cal-day-list"></ul>
-    </section>`;
+    </section>
+    <section class="card cal-habits">
+      <div class="day-head"><h2 id="cal-hb-title">習慣打卡</h2><a class="sub" href="#/habits">習慣養成 ›</a></div>
+      <ul class="cal-hb" id="cal-habits"></ul>
+    </section>
+    <div id="cal-health"></div>`;
 
   const grid = $('#cal-grid', root);
   const dayList = $('#cal-day-list', root);
   bindTaskList(dayList, { animateDone: () => false });
+  // 20261121（使用者：點日曆的一天就能把那天的事做完）：今天＋過期未完成（同總覽）、那天的習慣打卡、飲食與保健食品
+  bindOverdueList($('#cal-overdue', root));
+  bindHabitDays($('#cal-habits', root));
+  const health = mountHealthDay($('#cal-health', root), ui.selected);
 
   $('#cal-view', root).addEventListener('click', (e) => {
     const b = e.target.closest('button');
@@ -274,6 +291,33 @@ export function mountCalendar(root) {
         memos: state.memosByTask[task.id], running: state.running,
       })).join('')
       : `<li class="empty">${dayExt.length ? '這天沒有任務。' : '這天沒有安排。'}可以在上方直接新增，或從日曆把任務拖過來。</li>`;
+    // 點今天：過期還沒做完的列在最上面（動作同總覽「昨天沒做完」）；其他天不列
+    const ov = sel === t ? overdueListHTML(t) : { items: [] };
+    $('#cal-overdue-wrap', root).hidden = !ov.items.length;
+    $('#cal-day-sub', root).hidden = !ov.items.length;
+    $('#cal-overdue', root).innerHTML = ov.html || '';
+    if (ov.items.length) {
+      $('#cal-overdue-title', root).textContent = `還沒做完的（已過期）：${ov.items.length} 件`;
+      foldList($('#cal-overdue', root), 5, { unit: '件' });
+    }
+    renderHabits(sel, t);
+    health.setDay(sel);
+  }
+
+  /** 那天的習慣打卡：一個習慣一列，點勾打卡／取消（同習慣頁的 toggleHabitDay）；未來的日子不能打卡 */
+  function renderHabits(sel, t) {
+    const habits = state.habits.filter((h) => !h.archived);
+    const done = new Set(state.habitLogs.filter((l) => l.log_date === sel).map((l) => l.habit_id));
+    const n = habits.filter((h) => done.has(h.id)).length;
+    $('#cal-hb-title', root).innerHTML = `${formatShort(sel)} 的習慣打卡${habits.length ? `<span class="sub">${n}／${habits.length}</span>` : ''}`;
+    const future = sel > t;
+    $('#cal-habits', root).innerHTML = habits.length ? habits.map((h) => {
+      const on = done.has(h.id);
+      return `<li data-id="${h.id}"${state.areasById[h.area_id]?.color ? ` style="--hc:${esc(state.areasById[h.area_id].color)}"` : ''}>
+        <button type="button" class="hday ${on ? 'on' : ''}" data-day="${sel}" aria-pressed="${on}" ${future ? 'disabled title="還沒到的日子不能打卡"' : ''}
+          aria-label="${esc(h.name)}：${on ? '已打卡，點一下取消' : '未打卡，點一下打卡'}"><span class="hd-c">${on ? '✓' : ''}</span></button>
+        <span class="cal-hb-name">${esc(h.name)}</span>${h.area_id ? areaChip(state.areasById[h.area_id]) : ''}</li>`;
+    }).join('') : '<li class="empty">還沒有習慣。到「習慣養成」新增一個吧。</li>';
   }
 
   return render;

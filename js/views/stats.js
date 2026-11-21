@@ -1,8 +1,8 @@
 // M4 時間統計（Phase 2）：數字卡、近 7 天長條圖、領域占比、本週任務預計與實際、手動補記、計時紀錄
-import * as data from '../data.js?v=202611212008';
-import { state, refreshTasks } from '../store.js?v=202611212008';
-import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611212008';
-import { today, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611212008';
+import * as data from '../data.js?v=202611212021';
+import { state, refreshTasks } from '../store.js?v=202611212021';
+import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611212021';
+import { today, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611212021';
 
 // Chart.js 固定版本，從 jsDelivr 載入（CLAUDE.md 技術棧）
 const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/auto/+esm';

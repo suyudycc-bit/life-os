@@ -1,8 +1,8 @@
 // 工具箱（20261114，來自回饋 34904791）：自己做的小工具（Apps Script、網站…）和在社群上收藏、之後可能用到的工具。
 // 資料在 tools（不在 store，這頁自己讀）；存取都在 data.js「工具箱」段。待看清單的「存到工具箱」也寫進這裡。
-import * as data from '../data.js?v=202611212008';
-import { $, esc, toast, confirmDialog, linkChip } from '../ui.js?v=202611212008';
-import { formatShort, localDate } from '../dates.js?v=202611212008';
+import * as data from '../data.js?v=202611212021';
+import { $, esc, toast, confirmDialog, linkChip } from '../ui.js?v=202611212021';
+import { formatShort, localDate } from '../dates.js?v=202611212021';
 
 const FILTER_KEY = 'lifeos-tools-filter';
 

@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611212008';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611212008';
+import { supabase } from './supabase.js?v=202611212021';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611212021';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -1192,6 +1192,8 @@ export function filterTasks(tasks, f, day = today()) {
     if (!f.showDone && !isOpen(t)) return false;
     if (f.areaId && t.area_id !== f.areaId) return false;
     if (f.priority && String(t.priority) !== String(f.priority)) return false;
+    // 20261121：搜尋標題（不分大小寫、可多個詞，全部都要有）
+    if (f.q && !String(f.q).toLowerCase().split(/\s+/).filter(Boolean).every((w) => t.title.toLowerCase().includes(w))) return false;
     const d = taskDay(t);
     switch (f.range) {
       case 'today': return isDueOn(t, day);
@@ -1201,6 +1203,22 @@ export function filterTasks(tasks, f, day = today()) {
       default: return true;
     }
   }).sort(compareTasks);
+}
+
+/**
+ * 依日期分組（20261121，使用者：任務管理不好用、看不到過期的）：已過期／今天／明天／之後／沒有日期／已完成。
+ * 日期＝到期日，沒有就排程日（taskDay）；已完成或放棄的另成一組（只有勾「顯示已完成」才會出現）。組內順序照傳進來的（已排序）。
+ */
+export const TASK_GROUPS = { overdue: '已過期', today: '今天', tomorrow: '明天', later: '之後', nodate: '沒有日期', closed: '已完成／放棄' };
+export function taskDateGroups(list, day = today()) {
+  const tomorrow = addDays(day, 1);
+  const groups = Object.fromEntries(Object.keys(TASK_GROUPS).map((k) => [k, []]));
+  for (const t of list) {
+    const d = taskDay(t);
+    const k = !isOpen(t) ? 'closed' : d == null ? 'nodate' : d < day ? 'overdue' : d === day ? 'today' : d === tomorrow ? 'tomorrow' : 'later';
+    groups[k].push(t);
+  }
+  return Object.entries(groups).filter(([, ts]) => ts.length).map(([key, tasks]) => ({ key, label: TASK_GROUPS[key], tasks }));
 }
 
 /** 排序：未完成在前 → 手動順序（sort_order）→ 星標 → 優先級 → 日期（無日期最後） */

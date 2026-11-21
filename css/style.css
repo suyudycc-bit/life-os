@@ -2501,3 +2501,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .day-head h2 .sub { font-family: var(--f-num); font-size: 14px; font-weight: 400; margin-left: 4px; }
 /* 長清單收合的按鈕（ui.foldList） */
 .fold-more { display: block; margin: 6px 0 0; font-size: 13px; padding: 2px 8px; }
+/* 任務管理：搜尋與依日期分組（20261121） */
+.filters .f-q { flex: 1 1 160px; min-width: 140px; max-width: 260px; }
+.tl-group + .tl-group { margin-top: 14px; }
+.tl-group h3 { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 2px; font-size: 15px; color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.tl-group h3 .sub { font-family: var(--f-num); font-size: 13px; margin: 0; }
+.tl-group.tl-overdue h3 { color: var(--danger); }
+.tl-group.tl-closed h3 { color: var(--sub); }
+/* 日曆的當日區塊（20261121）：過期未完成、習慣打卡（多欄，習慣多也不會拉很長）、飲食與保健 */
+.cal-overdue { margin: 6px 0 12px; }
+.cal-overdue h3, .cal-sub { font-size: 15px; margin: 8px 0 2px; color: var(--ink); }
+.cal-overdue h3 { color: var(--danger); }
+.cal-habits h2 .sub { font-family: var(--f-num); font-size: 14px; font-weight: 400; margin-left: 8px; }
+.cal-hb { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 4px 16px; }
+.cal-hb li { display: flex; align-items: center; gap: 8px; padding: 3px 0; min-width: 0; }
+.cal-hb li.empty { grid-column: 1 / -1; }
+.cal-hb .hday { flex: none; width: 30px; height: 30px; justify-content: center; }
+.cal-hb .hday:disabled { opacity: .4; cursor: not-allowed; }
+.cal-hb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
