@@ -233,6 +233,13 @@ class Query {
             if (r.status === 'done' && old.status !== 'done') r.completed_at = now();
             else if (r.status !== 'done') r.completed_at = null;
             r.updated_at = now();
+            // trg_task_reschedule（20261121）：那一天往後移或被清掉 → 記一筆改期紀錄
+            const dayOf = (x) => x.due_date || (x.scheduled_start ? taipeiDate(x.scheduled_start) : null);
+            const open = (x) => x.status === 'todo' || x.status === 'doing';
+            const od = dayOf(old), nd = dayOf(r);
+            if (('due_date' in this.payload || 'scheduled_start' in this.payload) && od && open(old) && open(r) && (!nd || nd > od)) {
+              (db.task_reschedules ||= []).push({ id: uuid(), user_id: r.user_id, created_at: now(), task_id: r.id, from_day: od, to_day: nd, reason: null });
+            }
           }
         }
       }
@@ -253,6 +260,7 @@ class Query {
         if (this.table === 'tasks') { // task_memos on delete cascade；time_entries.task_id on delete set null
           const ids = new Set(out.map((r) => r.id));
           db.task_memos = (db.task_memos || []).filter((m) => !ids.has(m.task_id));
+          db.task_reschedules = (db.task_reschedules || []).filter((m) => !ids.has(m.task_id));
           for (const e of db.time_entries || []) if (ids.has(e.task_id)) e.task_id = null;
         }
         if (this.table === 'time_entries') rollup(db, out);

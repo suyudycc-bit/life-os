@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611212021';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611212021';
+import { supabase } from './supabase.js?v=202611212318';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611212318';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -894,7 +894,8 @@ export const BACKUP_TABLES = ['areas', 'projects', 'goals', 'work_tags', 'tasks'
   'quotes', // 20261112 佳句本（參照 media_items）
   'tools', // 20261114 工具箱（不參照其他表）
   'meal_logs', 'supplements', 'supplement_logs', // 20261116 飲食與保健（logs 參照 supplements，排在後面）
-  'energy_logs']; // 20261118 好時光日誌（參照 tasks、time_entries、areas）
+  'energy_logs', // 20261118 好時光日誌（參照 tasks、time_entries、areas）
+  'task_reschedules']; // 20261121 改期紀錄（參照 tasks）
 export const BACKUP_LABELS = {
   areas: '領域', projects: '專案', goals: '目標', tasks: '任務', task_memos: '進度 memo', time_entries: '計時紀錄',
   daily_reviews: '每日復盤', notes: '靈感', habits: '習慣', habit_logs: '打卡',
@@ -903,13 +904,17 @@ export const BACKUP_LABELS = {
   inbox_items: '待看清單', contact_stages: '跟進階段', contacts: '跟進對象', contact_logs: '聯絡紀錄',
   reflections: '內在整理', feedback: '回饋', quotes: '佳句本', tools: '工具箱',
   meal_logs: '飲食紀錄', supplements: '保健食品', supplement_logs: '保健食品打勾', energy_logs: '投入與能量',
+  task_reschedules: '改期紀錄',
 };
 const PAGE = 1000; // 一次讀 1000 筆，分頁讀完，避免被 API 單次筆數上限截斷
 
 async function fetchAll(table) {
   const out = [];
   for (let from = 0; ; from += PAGE) {
-    const rows = must(await supabase.from(table).select('*').order('id').range(from, from + PAGE - 1));
+    const res = await supabase.from(table).select('*').order('id').range(from, from + PAGE - 1);
+    // 新功能的表還沒建（migration 還沒執行）時當作沒有資料，不讓整個備份失敗
+    if (from === 0 && res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01')) return out;
+    const rows = must(res);
     out.push(...rows);
     if (rows.length < PAGE) return out;
   }
@@ -944,6 +949,7 @@ const BACKUP_REFS = {
   quotes: { media_id: 'media_items' },
   supplement_logs: { supplement_id: 'supplements' },
   energy_logs: { task_id: 'tasks', entry_id: 'time_entries', area_id: 'areas' },
+  task_reschedules: { task_id: 'tasks' },
 };
 // 內容比對用的鍵：id 不同但內容相同（例如同一份備份第二次匯入到另一個帳號）也視為已存在
 const NATURAL_KEY = {
@@ -975,9 +981,10 @@ const NATURAL_KEY = {
   supplements: (r) => `${r.name}|${r.created_at}`,
   supplement_logs: (r) => `${r.supplement_id}|${r.log_date}|${r.slot}`,
   energy_logs: (r) => `${r.created_at}|${r.task_id || ''}`,
+  task_reschedules: (r) => `${r.task_id}|${r.created_at}`,
 };
 // 必填的關聯：找不到對應就整筆略過（其餘找不到就設為空）
-const REQUIRED_REFS = { supplement_logs: ['supplement_id'], contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
+const REQUIRED_REFS = { supplement_logs: ['supplement_id'], contact_logs: ['contact_id'], tasks: ['area_id'], task_memos: ['task_id'], task_reschedules: ['task_id'], time_entries: ['area_id'], habit_logs: ['habit_id'],
   projects: ['area_id'], goals: ['area_id'] };
 
 /**
@@ -1675,7 +1682,7 @@ export function yearStats({ year, tasks, entries, goals, habitLogs, media, areas
 // --- 垃圾桶：刪除前把那筆＋底下會被連帶刪除的資料＋會被取消的關聯存起來，30 天內可還原 ---
 export const TRASH_DAYS = 30;
 const TRASH_SPEC = {
-  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id', energy_logs: 'task_id' } },
+  tasks: { label: (r) => r.title, cascade: { task_memos: 'task_id', task_reschedules: 'task_id' }, setnull: { time_entries: 'task_id', reflections: 'task_id', energy_logs: 'task_id' } },
   projects: { label: (r) => r.name, setnull: { tasks: 'project_id', goals: 'project_id', habits: 'project_id' } },
   goals: { label: (r) => r.title, setnull: { tasks: 'goal_id', habits: 'goal_id' } },
   habits: { label: (r) => r.name, cascade: { habit_logs: 'habit_id' } },
@@ -1709,7 +1716,9 @@ export async function trashDelete(table, id) {
   if (!row) throw new Error('找不到這筆資料（可能已被刪除）');
   const payload = { row, cascade: {}, setnull: {} };
   for (const [t, col] of Object.entries(spec.cascade || {})) {
-    payload.cascade[t] = must(await supabase.from(t).select('*').eq(col, id));
+    const res = await supabase.from(t).select('*').eq(col, id);
+    // 新功能的表還沒建（migration 還沒執行）就略過，不擋刪除
+    payload.cascade[t] = res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01') ? [] : must(res);
   }
   for (const [t, cols] of Object.entries(spec.setnull || {})) {
     for (const col of [].concat(cols)) {
@@ -1779,7 +1788,7 @@ async function restoreFixRefs(table, original) {
     if (!row[col] || ref === table) continue;
     const hit = must(await supabase.from(ref).select('id').eq('id', row[col]).maybeSingle());
     if (hit) continue;
-    if (['habit_logs', 'contact_logs', 'task_memos'].includes(table)) throw new Error(`原本的${label}已不存在，無法還原`);
+    if (['habit_logs', 'contact_logs', 'task_memos', 'task_reschedules'].includes(table)) throw new Error(`原本的${label}已不存在，無法還原`);
     row[col] = null;
     notes.push(`原本的${label}已不存在，已取消關聯`);
   }
@@ -3512,4 +3521,86 @@ export function lifeWeeksSummary(birth, lifeYears, { reviews = [], tasks = [], g
   const total = lifeYears * LIFE_WEEKS_PER_ROW;
   const lived = now ? now.age * LIFE_WEEKS_PER_ROW + now.week : 0; // 已經過完的格數（不含本週）
   return { cells, now, lived, total, remaining: Math.max(0, total - lived - 1), logged };
+}
+
+// ===== 改期紀錄（20261121，migration 20261121_task_reschedules.sql）=====
+// 任務的那一天（到期日，沒有就排程日）往後移或被清掉時，資料庫觸發器自動記一筆；畫面只補「原因」。
+// 原本的期限＝最早一筆的 from_day；沒有紀錄＝目前的日期（不另存欄位）。
+export const RESCHEDULE_REASONS = {
+  underestimated: '低估時間', interrupted: '被插件', waiting: '等別人', low_energy: '沒能量',
+  overbooked: '排太滿', deprioritized: '沒那麼重要了', other: '其他',
+};
+/** 同一件任務延到第幾次時提醒處理（使用者選「延第 3 次時提醒」） */
+export const POSTPONE_NUDGE_AT = 3;
+
+/** 全部改期紀錄（舊到新）；還沒執行 migration 時當作沒有，不讓任務讀不出來 */
+export async function listReschedules() {
+  const res = await supabase.from('task_reschedules').select('id, task_id, from_day, to_day, reason, created_at').order('created_at');
+  if (res.error && (res.error.code === 'PGRST205' || res.error.code === '42P01')) return [];
+  return must(res);
+}
+
+/** 補上延期原因（一次可以多筆，例如月度遷移一次移好幾件）；核對筆數 */
+export async function setRescheduleReason(ids, reason) {
+  if (!ids?.length) return 0;
+  if (reason != null && !RESCHEDULE_REASONS[reason]) throw new Error('延期原因不正確');
+  const rows = must(await supabase.from('task_reschedules').update({ reason }).in('id', ids).select('id'));
+  if (rows.length !== ids.length) throw new Error(`延期原因預期更新 ${ids.length} 筆，實際 ${rows.length} 筆`);
+  return rows.length;
+}
+
+/** 依任務分組（舊到新） */
+export function reschedulesByTask(rows) {
+  const map = {};
+  for (const r of rows) (map[r.task_id] ||= []).push(r);
+  return map;
+}
+
+/** 原本的期限：最早一筆改期紀錄的 from_day；沒延過＝目前的那一天 */
+export function originalDay(task, rows = []) {
+  return rows[0]?.from_day || taskDay(task) || null;
+}
+
+/**
+ * 照計畫走的統計（期間 from～to，台北日期，含頭尾）：
+ * - onTime／late：這段期間完成、有排日期的任務，完成日 ≤ 原本的期限＝準時
+ * - postponements：這段期間發生的延期次數、涉及幾件、平均延幾天（清掉日期的不算天數）
+ * - reasons：原因排行（沒填的另計 unknown）
+ * - repeat：還沒完成、延了 ≥ 2 次的任務（次數多的在前，最多 5 件）
+ * @param tasks 呼叫端傳生活那一份
+ */
+export function scheduleStats({ tasks, reschedules, from, to }) {
+  const ids = new Set(tasks.map((t) => t.id));
+  const rows = reschedules.filter((r) => ids.has(r.task_id));
+  const byTask = reschedulesByTask(rows);
+  const inRange = (d) => d && d >= from && d <= to;
+  let onTime = 0, late = 0, lateDays = 0;
+  for (const t of tasks) {
+    if (t.status !== 'done' || !inRange(summaryDay(t))) continue;
+    const orig = originalDay(t, byTask[t.id]);
+    if (!orig) continue;
+    const done = summaryDay(t);
+    if (done <= orig) onTime += 1;
+    else { late += 1; lateDays += daysBetween(orig, done); }
+  }
+  const moved = rows.filter((r) => inRange(localDate(r.created_at)));
+  const withDays = moved.filter((r) => r.to_day);
+  const reasons = {};
+  for (const r of moved) reasons[r.reason || 'unknown'] = (reasons[r.reason || 'unknown'] || 0) + 1;
+  const byId = Object.fromEntries(tasks.map((t) => [t.id, t]));
+  const repeat = Object.entries(byTask)
+    .filter(([id, rs]) => rs.length >= 2 && byId[id] && isOpen(byId[id]))
+    .map(([id, rs]) => ({ task: byId[id], count: rs.length, original: rs[0].from_day }))
+    .sort((a, b) => b.count - a.count || a.original.localeCompare(b.original)).slice(0, 5);
+  const finished = onTime + late;
+  return {
+    onTime, late, finished,
+    onTimeRate: finished ? Math.round((onTime / finished) * 100) : null,
+    avgLateDays: late ? Math.round((lateDays / late) * 10) / 10 : null,
+    postponements: moved.length,
+    postponedTasks: new Set(moved.map((r) => r.task_id)).size,
+    avgPushDays: withDays.length ? Math.round((withDays.reduce((n, r) => n + daysBetween(r.from_day, r.to_day), 0) / withDays.length) * 10) / 10 : null,
+    reasons: Object.entries(reasons).sort((a, b) => b[1] - a[1]).map(([key, n]) => ({ key, label: RESCHEDULE_REASONS[key] || '沒填', n })),
+    repeat,
+  };
 }

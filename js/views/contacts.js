@@ -1,11 +1,11 @@
 // 跟進對象（20261106，C1）：名單依階段分組、聯絡紀錄時間軸、今天該跟進、階段設定、心法筆記。
 // 資料在 contact_stages／contacts／contact_logs（不在 store，這頁自己讀）；計算都在 data.js（跟進對象段落）。
 // 階段、提醒天數、聯絡類型都可自訂；預設值只是起點，不代表任何老師的心法（docs/11 Q2）。
-import * as data from '../data.js?v=202611212021';
-import { state, refreshNotes } from '../store.js?v=202611212021';
-import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js?v=202611212021';
-import { openNoteDialog } from './notes.js?v=202611212021';
-import { today, formatShort } from '../dates.js?v=202611212021';
+import * as data from '../data.js?v=202611212318';
+import { state, refreshNotes } from '../store.js?v=202611212318';
+import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js?v=202611212318';
+import { openNoteDialog } from './notes.js?v=202611212318';
+import { today, formatShort } from '../dates.js?v=202611212318';
 
 const TAB_KEY = 'lifeos-contacts-tab';
 

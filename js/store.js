@@ -1,7 +1,8 @@
 // 畫面共用狀態：只快取從資料庫讀回的資料，不自行產生衍生數字
-import * as data from './data.js?v=202611212021';
+import * as data from './data.js?v=202611212318';
 
 export const state = { areas: [], areasById: {}, tasks: [], memosByTask: {}, entries: [], running: null, summary: null,
+  reschedules: null, reschedulesByTask: {}, // 20261121 改期紀錄（null＝還沒讀過，第一次讀不算「新的延期」）
   notes: [], habits: [], habitLogs: [], projects: [], goals: [], workTags: [],
   // 生活頁面用的資料：排除「列入工作看板」領域（工作只留在工作看板，使用者決定 2026-11-03）
   life: { areas: [], tasks: [], entries: [], projects: [] } };
@@ -77,9 +78,16 @@ export async function refreshAreas() {
 
 /** 任何寫入後重新讀取任務、memo、計時與今日彙總，確保各模組看到同一份資料 */
 export async function refreshTasks() {
-  const [tasks, memos, entries, running, summary] = await Promise.all([
+  const [tasks, memos, entries, running, summary, reschedules] = await Promise.all([
     data.listTasks(), data.listMemos(), data.listEntries(), data.getRunningEntry(), data.getDailySummary(),
+    data.listReschedules(),
   ]);
+  // 20261121 改期紀錄：資料庫觸發器在任務往後移時記一筆。不管是哪一頁改的日期，寫入後都會走到這裡，
+  // 所以在這裡比對「這次多出來、還沒填原因」的紀錄，發 lifeos:tasks-postponed 讓畫面問原因（views/postpone.js）。
+  const seen = state.reschedules ? new Set(state.reschedules.map((r) => r.id)) : null;
+  const fresh = seen ? reschedules.filter((r) => !seen.has(r.id) && !r.reason && Date.now() - new Date(r.created_at) < 120000) : [];
+  state.reschedules = reschedules;
+  state.reschedulesByTask = data.reschedulesByTask(reschedules);
   state.tasks = tasks;
   state.memosByTask = data.memosByTask(memos);
   state.entries = entries;
@@ -87,10 +95,12 @@ export async function refreshTasks() {
   state.summary = summary;
   computeLife();
   listeners.forEach((fn) => fn(state));
+  if (fresh.length) window.dispatchEvent(new CustomEvent('lifeos:tasks-postponed', { detail: { rows: fresh } }));
 }
 
 export function reset() {
   Object.assign(state, { areas: [], areasById: {}, tasks: [], memosByTask: {}, entries: [], running: null, summary: null,
+    reschedules: null, reschedulesByTask: {},
     notes: [], habits: [], habitLogs: [], projects: [], goals: [], workTags: [],
     life: { areas: [], tasks: [], entries: [], projects: [] } });
 }

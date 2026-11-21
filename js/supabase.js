@@ -1,4 +1,4 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=202611212021';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js?v=202611212318';
 
 // supabase-js 固定版本，從 jsDelivr 載入
 const SUPABASE_CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/+esm';
@@ -21,7 +21,7 @@ export const authUrlError = urlHash.get('error_description') || urlHash.get('err
 async function createClientForEnv() {
   if (isMock) {
     // 僅供本機測試介面；資料存在這台瀏覽器，不會同步，也不會碰到 Supabase
-    const { createMockClient } = await import('./dev/mock-supabase.js?v=202611212021');
+    const { createMockClient } = await import('./dev/mock-supabase.js?v=202611212318');
     return createMockClient();
   }
   if (isConfigured) {

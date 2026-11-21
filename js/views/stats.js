@@ -1,8 +1,8 @@
 // M4 時間統計（Phase 2）：數字卡、近 7 天長條圖、領域占比、本週任務預計與實際、手動補記、計時紀錄
-import * as data from '../data.js?v=202611212021';
-import { state, refreshTasks } from '../store.js?v=202611212021';
-import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611212021';
-import { today, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611212021';
+import * as data from '../data.js?v=202611212318';
+import { state, refreshTasks } from '../store.js?v=202611212318';
+import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611212318';
+import { today, addDays, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611212318';
 
 // Chart.js 固定版本，從 jsDelivr 載入（CLAUDE.md 技術棧）
 const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/auto/+esm';
@@ -11,6 +11,10 @@ const loadChart = () => (chartLib ||= import(CHART_CDN).then((m) => m.default));
 
 const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六'];
 const weekdayOf = (d) => WEEKDAY[new Date(`${d}T12:00:00+08:00`).getUTCDay()];
+
+// 20261121「照計畫走了嗎」的期間（不記住，預設近 30 天）
+const SCHED_RANGES = { d7: ['近 7 天', 6], d30: ['近 30 天', 29], d90: ['近 90 天', 89] };
+let schedRange = 'd30';
 
 export function mountStats(root) {
   root.innerHTML = `
@@ -36,6 +40,21 @@ export function mountStats(root) {
     <section class="card">
       <h2>本週任務：預計與實際</h2>
       <div class="table-wrap"><table class="table" id="st-table"></table></div>
+    </section>
+    <section class="card" id="st-sched">
+      <div class="card-head"><h2>照計畫走了嗎</h2>
+        <div class="seg" id="sc-range">${Object.entries(SCHED_RANGES).map(([k, [l]]) => `<button type="button" data-v="${k}">${l}</button>`).join('')}</div></div>
+      <div class="sc-grid">
+        <div><b id="sc-rate"></b><span id="sc-rate-note"></span></div>
+        <div><b id="sc-late"></b><span>晚完成的平均晚幾天</span></div>
+        <div><b id="sc-moves"></b><span id="sc-moves-note"></span></div>
+        <div><b id="sc-push"></b><span>每次平均往後延幾天</span></div>
+      </div>
+      <div class="sc-cols">
+        <div><h3>延期原因</h3><ol id="sc-reasons"></ol></div>
+        <div><h3>一直被延的（還沒做完）</h3><ul id="sc-repeat"></ul></div>
+      </div>
+      <p class="sub">準時＝完成那天沒有晚於「原本的期限」（第一次排的日期）。改期紀錄從 2026/11/21 開始，之前改過日期的任務，原本的期限只能用最後的日期算。</p>
     </section>
     <div class="grid-2">
       <section class="card">
@@ -87,7 +106,31 @@ export function mountStats(root) {
   let bar = null;
   let donut = null;
 
+  $('#sc-range', root).addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (b) { schedRange = b.dataset.v; renderSchedule(); }
+  });
+
+  function renderSchedule() {
+    const to = today();
+    const from = addDays(to, -SCHED_RANGES[schedRange][1]);
+    root.querySelectorAll('#sc-range button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === schedRange)));
+    const sc = data.scheduleStats({ tasks: state.life.tasks, reschedules: state.reschedules || [], from, to });
+    $('#sc-rate', root).textContent = sc.onTimeRate == null ? '—' : `${sc.onTimeRate}%`;
+    $('#sc-rate-note', root).textContent = sc.finished ? `準時完成（${sc.onTime}／${sc.finished} 件）` : '這段期間還沒有完成有日期的任務';
+    $('#sc-late', root).textContent = sc.avgLateDays == null ? '—' : `${sc.avgLateDays} 天`;
+    $('#sc-moves', root).textContent = `${sc.postponements} 次`;
+    $('#sc-moves-note', root).textContent = `延期（${sc.postponedTasks} 件任務）`;
+    $('#sc-push', root).textContent = sc.avgPushDays == null ? '—' : `${sc.avgPushDays} 天`;
+    $('#sc-reasons', root).innerHTML = sc.reasons.length
+      ? sc.reasons.map((r) => `<li>${esc(r.label)}：${r.n} 次</li>`).join('') : '<li class="empty">這段期間沒有延期</li>';
+    $('#sc-repeat', root).innerHTML = sc.repeat.length
+      ? sc.repeat.map((r) => `<li>${esc(r.task.title)}<span class="sub">・延 ${r.count} 次，原本 ${formatShort(r.original)}</span></li>`).join('')
+      : '<li class="empty">沒有延兩次以上的任務</li>';
+  }
+
   return function render() {
+    renderSchedule();
     const s = data.timeStats(state.life.entries, state.life.tasks); // 生活的時間統計，不含工作看板的工作
     const area = (id) => state.areasById[id];
     $('#st-range', root).textContent = `本週 ${formatShort(s.weekStart)}–${formatShort(s.weekEnd)}（台北時間）`;

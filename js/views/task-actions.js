@@ -1,8 +1,8 @@
 // 任務列上的操作（完成、星標、編輯、刪除），任務管理與總覽共用
-import * as data from '../data.js?v=202611212021';
-import { state, refreshTasks } from '../store.js?v=202611212021';
-import { $, esc, toast, confirmDialog, linkify, formatDateTime, pastedLink } from '../ui.js?v=202611212021';
-import { toLocalInput, fromLocalInput, today, formatShort, localDate } from '../dates.js?v=202611212021';
+import * as data from '../data.js?v=202611212318';
+import { state, refreshTasks } from '../store.js?v=202611212318';
+import { $, esc, toast, confirmDialog, linkify, formatDateTime, pastedLink } from '../ui.js?v=202611212318';
+import { toLocalInput, fromLocalInput, today, formatShort, localDate } from '../dates.js?v=202611212318';
 
 async function run(fn, okMsg) {
   try {
@@ -134,6 +134,13 @@ export async function resolveWorkTags({ type, project }) {
   return { work_type_id: t?.id || null, work_project_tag_id: p?.id || null };
 }
 
+/** 20261121 改期歷程：原本哪天、每次改到哪天、原因（只讀） */
+function historyHTML(rows) {
+  if (!rows?.length) return '';
+  return `<details class="td-history"><summary>延過 ${rows.length} 次・原本 ${formatShort(rows[0].from_day)}</summary><ol>${rows.map((r) =>
+    `<li>${formatShort(r.from_day)} → ${r.to_day ? formatShort(r.to_day) : '沒有日期'}${r.reason ? `・${data.RESCHEDULE_REASONS[r.reason] || ''}` : ''}<span class="sub">（${formatShort(localDate(r.created_at))} 改）</span></li>`).join('')}</ol></details>`;
+}
+
 export function openTaskEditor(task) {
   const dlg = $('#task-dialog');
   const form = $('form', dlg);
@@ -156,6 +163,7 @@ export function openTaskEditor(task) {
       <label>到期日<input type="date" name="due_date" value="${task.due_date || ''}"></label>
       <label>排程開始<input type="datetime-local" name="scheduled_start" value="${toLocalInput(task.scheduled_start)}"></label>
     </div>
+    ${historyHTML(state.reschedulesByTask?.[task.id])}
     <div class="row">
       <label>預計分鐘<input type="number" min="0" step="5" name="estimate_min" value="${task.estimate_min ?? ''}"></label>
       <label>狀態<select name="status">

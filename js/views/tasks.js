@@ -1,11 +1,11 @@
 // M2 任務管理（Phase 1：建立、列表、篩選、星標、編輯、刪除、完成；計時於 Phase 2）
-import * as data from '../data.js?v=202611212021';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212021';
-import { $, esc, toast, PRIORITY } from '../ui.js?v=202611212021';
-import { today } from '../dates.js?v=202611212021';
-import { taskItemHTML } from './task-item.js?v=202611212021';
-import { bindTaskList } from './task-actions.js?v=202611212021';
-import { openAreaDialog } from './area-dialog.js?v=202611212021';
+import * as data from '../data.js?v=202611212318';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212318';
+import { $, esc, toast, PRIORITY } from '../ui.js?v=202611212318';
+import { today } from '../dates.js?v=202611212318';
+import { taskItemHTML } from './task-item.js?v=202611212318';
+import { bindTaskList } from './task-actions.js?v=202611212318';
+import { openAreaDialog } from './area-dialog.js?v=202611212318';
 
 const ADD_AREA = '__add__';
 
@@ -49,16 +49,16 @@ export function mountTasks(root) {
     e.preventDefault();
     const f = new FormData(form);
     try {
-      await data.createTask({
+      const created = await data.createTask({
         title: f.get('title'),
         area_id: f.get('area_id'),
         priority: Number(f.get('priority')),
         due_date: f.get('due_date') || null,
       }, state.tasks);
       form.title.value = '';
-      form.title.focus();
       await refreshTasks();
-      toast('已建立');
+      form.title.focus({ preventScroll: true });
+      showCreated(created);
     } catch (err) {
       toast(err.message, true);
     }
@@ -93,6 +93,21 @@ export function mountTasks(root) {
   const ul = $('#task-list', root);
   bindTaskList(ul, { animateDone: () => !filter.showDone });
   enableReorder(ul);
+
+  // 20261121：依日期分組後，新任務在「今天」那組，前面的「已過期」很長時會在畫面外，看起來像沒新增。
+  // 建立後捲到那一列並閃一下；被目前的篩選擋掉時直接說原因。
+  function showCreated(t) {
+    const li = $(`#task-list .task[data-id="${t.id}"]`, root);
+    if (!li) {
+      toast('已建立，但目前的篩選看不到它（換成「全部」或清掉搜尋就看得到）');
+      return;
+    }
+    const r = li.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > window.innerHeight) li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    li.classList.add('just-added');
+    setTimeout(() => li.classList.remove('just-added'), 2400);
+    toast('已建立');
+  }
 
   function setFilter(patch) {
     Object.assign(filter, patch);

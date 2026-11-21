@@ -1,8 +1,8 @@
 // 任務列（任務管理與總覽共用）
-import { esc, areaChip, PRIORITY, linkChip, formatDateTime } from '../ui.js?v=202611212021';
-import { state } from '../store.js?v=202611212021';
-import { taskDay, isOpen } from '../data.js?v=202611212021';
-import { formatShort, formatTime, today, formatMin, formatHMS, formatClock } from '../dates.js?v=202611212021';
+import { esc, areaChip, PRIORITY, linkChip, formatDateTime } from '../ui.js?v=202611212318';
+import { state } from '../store.js?v=202611212318';
+import { taskDay, isOpen } from '../data.js?v=202611212318';
+import { formatShort, formatTime, today, formatMin, formatHMS, formatClock } from '../dates.js?v=202611212318';
 
 /**
  * @param {object} t 任務
@@ -35,6 +35,7 @@ export function taskItemHTML(t, areasById, { actions = true, draggable = false, 
         ${t.project_id && state.projects.find((p) => p.id === t.project_id) ? `<a class="proj-chip" href="#/projects" title="專案">📁 ${esc(state.projects.find((p) => p.id === t.project_id).name)}</a>` : ''}
         <span class="prio p${t.priority}">${PRIORITY[t.priority]}優先</span>
         ${when ? `<span class="${overdue ? 'overdue' : ''}">${overdue ? '已過期 ' : ''}${esc(when)}</span>` : ''}
+        ${open && state.reschedulesByTask?.[t.id]?.length ? `<span class="postponed" title="原本 ${formatShort(state.reschedulesByTask[t.id][0].from_day)}">延 ${state.reschedulesByTask[t.id].length} 次</span>` : ''}
         ${t.estimate_min || t.actual_sec ? `<span>${t.actual_sec ? `實際 ${formatHMS(t.actual_sec)}` : ''}${t.actual_sec && t.estimate_min ? '／' : ''}${t.estimate_min ? `預計 ${formatMin(t.estimate_min)}` : ''}</span>` : ''}
         ${links.map((u) => linkChip(u)).join('')}
       </div>

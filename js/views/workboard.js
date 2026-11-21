@@ -1,14 +1,14 @@
 // 工作看板（Phase W2）：手帳風五欄，內容就是「工作」領域的任務（單一來源，見 docs/08）
 // 欄位由任務狀態與日期算出（data.boardColumnOf）；拖到別欄＝改狀態或排程。
 // 舊的 Apps Script 看板保留為「舊看板」切換（嵌入），等 W6 確認不用再拿掉。
-import * as config from '../config.js?v=202611212021';
-import * as data from '../data.js?v=202611212021';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212021';
-import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611212021';
-import { today, formatShort, formatHMS } from '../dates.js?v=202611212021';
-import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, openContinueDialog, askSameCase } from './task-actions.js?v=202611212021';
-import { openAreaDialog } from './area-dialog.js?v=202611212021';
-import { mountCases, openPhrases } from './cases.js?v=202611212021';
+import * as config from '../config.js?v=202611212318';
+import * as data from '../data.js?v=202611212318';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212318';
+import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611212318';
+import { today, formatShort, formatHMS } from '../dates.js?v=202611212318';
+import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, openContinueDialog, askSameCase } from './task-actions.js?v=202611212318';
+import { openAreaDialog } from './area-dialog.js?v=202611212318';
+import { mountCases, openPhrases } from './cases.js?v=202611212318';
 
 const BOARD_URL = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(config.WORK_BOARD_URL || '')
   ? config.WORK_BOARD_URL : '';

@@ -1,9 +1,9 @@
 // M5 每日復盤（Phase 3）：數字全讀 daily_summary 與當天 time_entries（唯讀）；只有文字欄是手寫存檔
 // 顯化規劃・階段一（20261108）：晚上多「里程碑／心想事成」「感恩」兩格；頁首顯示當天的今日身分與肯定語（和總覽同一筆 daily_reviews）
-import * as data from '../data.js?v=202611212021';
-import { state } from '../store.js?v=202611212021';
-import { $, esc, areaChip, linkify, foldList } from '../ui.js?v=202611212021';
-import { today, addDays, formatShort, formatHMS, formatSignedHMS } from '../dates.js?v=202611212021';
+import * as data from '../data.js?v=202611212318';
+import { state } from '../store.js?v=202611212318';
+import { $, esc, areaChip, linkify, foldList } from '../ui.js?v=202611212318';
+import { today, addDays, formatShort, formatHMS, formatSignedHMS } from '../dates.js?v=202611212318';
 
 const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/auto/+esm';
 let chartLib = null;

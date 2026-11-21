@@ -2506,6 +2506,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .tl-group + .tl-group { margin-top: 14px; }
 .tl-group h3 { display: flex; align-items: baseline; gap: 8px; margin: 4px 0 2px; font-size: 15px; color: var(--ink); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
 .tl-group h3 .sub { font-family: var(--f-num); font-size: 13px; margin: 0; }
+.task.just-added { animation: just-added 2.4s ease-out; }
+@keyframes just-added { 0%, 50% { background: var(--hl); } }
+@media (prefers-reduced-motion: reduce) { .task.just-added { animation: none; background: var(--hl); } }
 .tl-group.tl-overdue h3 { color: var(--danger); }
 .tl-group.tl-closed h3 { color: var(--sub); }
 /* 日曆的當日區塊（20261121）：過期未完成、習慣打卡（多欄，習慣多也不會拉很長）、飲食與保健 */
@@ -2519,3 +2522,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .cal-hb .hday { flex: none; width: 30px; height: 30px; justify-content: center; }
 .cal-hb .hday:disabled { opacity: .4; cursor: not-allowed; }
 .cal-hb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ===== 延期原因與照計畫走（20261121）===== */
+.postpone-bar { bottom: 16px; }
+.energy-bar ~ .postpone-bar { bottom: 200px; } /* 和「做得如何」同時出現時疊在上面 */
+.pp-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-reasons button { border: 1px solid var(--line); background: transparent; border-radius: 4px; padding: 5px 9px; font: inherit; font-size: 13.5px; cursor: pointer; color: var(--ink); }
+.pp-reasons button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+.pp-nudge { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13.5px; }
+.pp-nudge p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.pp-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.task-meta .postponed { font-size: 12px; color: var(--danger); white-space: nowrap; }
+.sc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 6px 0 10px; }
+@container main (max-width: 700px) { .sc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sc-grid > div { border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; }
+.sc-grid b { display: block; font-family: var(--f-num); font-size: 22px; }
+.sc-grid span { font-size: 12.5px; color: var(--sub); }
+.sc-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@container main (max-width: 700px) { .sc-cols { grid-template-columns: minmax(0, 1fr); } }
+.sc-cols h3 { font-size: 14px; margin: 4px 0; }
+.sc-cols ol, .sc-cols ul { margin: 0; padding-left: 1.3em; font-size: 13.5px; }
+.sc-cols li { margin: 2px 0; overflow-wrap: anywhere; }
+.td-history { font-size: 13px; color: var(--sub); margin: 4px 0 0; }
+.td-history li { margin: 1px 0; }
+#st-sched .card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+#st-sched .card-head h2 { margin: 0; }

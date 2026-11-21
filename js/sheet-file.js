@@ -2,7 +2,7 @@
 // - CSV：先當 UTF-8 解；不是合法 UTF-8 就當 Big5（Windows Excel「另存 CSV」常見）。
 // - Excel（.xlsx）：用瀏覽器內建的 DecompressionStream 解壓，不另載函式庫。
 //   讀「規劃表」或「每日進度」分頁，沒有就讀第一個分頁。日期若是 Excel 序號，交給 data.planDate 換算。
-import { cfaParseCSV } from './data.js?v=202611212021';
+import { cfaParseCSV } from './data.js?v=202611212318';
 
 export async function readSheetFile(file) {
   const name = (file.name || '').toLowerCase();
