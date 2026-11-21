@@ -4,12 +4,12 @@
 // 數字的算法都在 data.js（yearStats、futureLogMonths），這裡只顯示。
 // 終點身分（20261108 顯化規劃・階段二）＝年度那一筆 period_reviews 的 vision_identity／vision_senses；
 // 身分主線＝goals.mainline（不另存清單；目標對話框、專案卡片、總覽讀同一欄）。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshProjects } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611212318';
-import { today, formatShort } from '../dates.js?v=202611212318';
-import { openGoalDialog, projectOptions, goalProjectTag } from './projects.js?v=202611212318';
-import { openTaskEditor } from './task-actions.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshProjects } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611220214';
+import { today, formatShort } from '../dates.js?v=202611220214';
+import { openGoalDialog, projectOptions, goalProjectTag } from './projects.js?v=202611220214';
+import { openTaskEditor } from './task-actions.js?v=202611220214';
 
 const SAVE_DELAY = 800; // 回顧停止輸入多久後自動儲存（同每日復盤）
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
@@ -117,7 +117,6 @@ export function mountYear(root) {
         </div>
         <div class="yr-ml">
           <div class="yr-ml-head"><h3>身分主線</h3><span class="sub" id="yr-ml-count"></span></div>
-          <p class="sub">從目標裡挑 2～3 條最能讓你成為那個人的。總覽會用主線目標所屬專案的下一步，提醒你今天先做它。</p>
           <ul class="yr-ml-list" id="yr-ml-list"></ul>
           <div class="yr-ml-tools">
             <select id="yr-ml-pick" aria-label="從目標加入身分主線"></select>
@@ -173,7 +172,7 @@ export function mountYear(root) {
       </div>
 
       <section class="card">
-        <div class="day-head yr-fl-head"><h2>Future Log</h2><span class="sub">◆ 目標期限・★ 星號任務（點了可以編輯）</span>
+        <div class="day-head yr-fl-head"><h2>Future Log</h2><span class="sub">◆ 目標期限・★ 星號任務</span>
           <label class="check yr-fl-done"><input type="checkbox" id="yr-fl-done" ${ui.flDone ? 'checked' : ''}> 顯示已完成的任務<span class="sub" id="yr-fl-done-n"></span></label></div>
         <div class="yr-future">
           ${Array.from({ length: 12 }, (_, i) => {
@@ -200,7 +199,6 @@ export function mountYear(root) {
           <div class="yr-px" id="yr-px" aria-label="${y} 年每一天的${SCALES[ui.by].label}"></div>
           <ul class="yr-legend" id="yr-legend"></ul>
         </div>
-        <p class="sub">點一格記下那天的心情與能量（可用方向鍵移動）。和「每日復盤」的心情／能量是同一份。</p>
       </section>
 
       <section class="card">
@@ -700,7 +698,6 @@ export function mountYear(root) {
         <h2>${formatShort(day)}（${weekday(day)}）${day === today() ? '<span class="today-dot">今天</span>' : ''}</h2>
         ${scaleRadios('mood', rec.mood)}
         ${scaleRadios('energy', rec.energy)}
-        <p class="sub">和每日復盤那天的心情／能量是同一份。</p>
         <div class="dialog-actions">
           <button type="button" class="btn-ghost danger" data-clear style="margin-right:auto" ${rec.mood || rec.energy ? '' : 'disabled'}>清除</button>
           <button type="button" class="btn-ghost" data-cancel>取消</button>

@@ -26,7 +26,7 @@ const DEFAULTS = {
   tasks: () => ({
     status: 'todo', priority: 2, starred: false, actual_min: 0, completed_at: null, notes: null,
     project_id: null, goal_id: null, due_date: null, scheduled_start: null, estimate_min: null, updated_at: now(),
-    sort_order: null, links: [], actual_sec: 0, case_no: null, work_type_id: null, board_parked: false, work_project_tag_id: null,
+    sort_order: null, links: [], actual_sec: 0, case_no: null, work_type_id: null, board_parked: false, work_project_tag_id: null, board_next_day: null,
     is_experiment: false, learning: null, // 20261118
   }),
   work_tags: () => ({ color: '#667085', active: true, sort: 0, kind: 'type' }), // migration 20261104；kind：20261106

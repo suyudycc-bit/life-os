@@ -1,12 +1,12 @@
 // M9 專案與目標（Phase 5）：有「下一步」的長期事項；任務可掛專案／目標，進度＝已完成任務／全部任務
-import * as data from '../data.js?v=202611212318';
-import { state, refreshProjects, refreshTasks, refreshHabits } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611212318';
-import { formatShort, today, addDays, weekStart } from '../dates.js?v=202611212318';
-import { enableReorder } from './tasks.js?v=202611212318';
-import { openTaskEditor } from './task-actions.js?v=202611212318';
-import { toggleHabitDay, streakBadge } from './habits.js?v=202611212318';
-import { readSheetFile } from '../sheet-file.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshProjects, refreshTasks, refreshHabits } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611220214';
+import { formatShort, today, addDays, weekStart } from '../dates.js?v=202611220214';
+import { enableReorder } from './tasks.js?v=202611220214';
+import { openTaskEditor } from './task-actions.js?v=202611220214';
+import { toggleHabitDay, streakBadge } from './habits.js?v=202611220214';
+import { readSheetFile } from '../sheet-file.js?v=202611220214';
 
 const VIEW_KEY = 'lifeos-pj-view';
 const ui = { status: 'active', view: 'cards', scale: 'week', withWork: false };
@@ -44,7 +44,6 @@ function openProjectDialog(p = null) {
         <label>開始日<input type="date" name="start_date" value="${v.start_date || ''}"></label>
         <label>結束日<input type="date" name="end_date" value="${v.end_date || ''}"></label>
       </div>
-      <p class="sub">日期可留白：甘特圖會用掛在專案上的任務日期推算（虛線）。</p>
       <label>下一步行動<input name="next_action" maxlength="200" value="${esc(v.next_action || '')}" placeholder="留白＝自動用專案裡排最前面的任務"></label>
       <label>備註<textarea name="notes" rows="3">${esc(v.notes || '')}</textarea></label>
       <div class="dialog-actions">
@@ -104,7 +103,6 @@ export function openGoalDialog(g = null, preset = {}) {
       </div>
       <label class="check"><input type="checkbox" name="mainline" ${v.mainline ? 'checked' : ''}> ★ 身分主線（年度手帳「終點身分」卡列出；總覽用它所屬專案的下一步當今天的主線任務）</label>
       <p class="sub" data-ml-hint ${otherMain >= data.MAINLINE_SUGGEST_MAX && !v.mainline ? '' : 'hidden'}>已經有 ${otherMain} 條進行中的主線，建議 2～3 條；仍可以勾。</p>
-      <p class="sub">期間＝這是哪一年、哪一季或哪個月的目標，會出現在年度手帳對應的位置。掛了專案的目標會出現在那張專案卡片裡。</p>
       <div class="dialog-actions">
         ${g ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
         <button type="button" class="btn-ghost" data-cancel>取消</button>

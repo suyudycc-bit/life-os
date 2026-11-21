@@ -1,12 +1,12 @@
 // 月度手帳（Phase J）：bullet journal 的月誌——月目標、本月一覽（日期直列）、遷移、月回顧。
 // 只讀生活的任務（state.life）；目標是同一份 goals（period＝'YYYY-MM'），「專案與目標」看得到同一筆。
 // 網址：#/month＝本月；#/month/2026-10＝指定月份（年度頁等其他頁可以直接連進來）。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks, refreshProjects } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, areaChip, foldList } from '../ui.js?v=202611212318';
-import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611212318';
-import { openTaskEditor } from './task-actions.js?v=202611212318';
-import { projectOptions, goalProjectTag } from './projects.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks, refreshProjects } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, areaChip, foldList } from '../ui.js?v=202611220214';
+import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611220214';
+import { openTaskEditor } from './task-actions.js?v=202611220214';
+import { projectOptions, goalProjectTag } from './projects.js?v=202611220214';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const SAVE_DELAY = 800; // 月回顧：停止輸入多久後自動儲存（毫秒）
@@ -54,7 +54,6 @@ export function mountMonth(root) {
         <div class="day-head"><h2>本月一覽</h2><span class="sub mo-legend">• 待辦　× 完成　○ 事件</span></div>
         <ul class="mo-undated" id="mo-undated"></ul>
         <ol class="mo-days" id="mo-days"></ol>
-        <p class="sub">點任務可以編輯；事件來自年度頁的 Future Log（這裡唯讀）。要排新任務請用「任務管理」或「日曆」。</p>
       </section>
       <div class="mo-side">
         <section class="card" id="mo-migrate-card"></section>
@@ -67,7 +66,7 @@ export function mountMonth(root) {
           <div class="day-head"><h2>月回顧</h2><span class="sub" id="mo-save" role="status"></span></div>
           <div class="stats mo-stats" id="mo-stats"></div>
           <div class="mo-gauges" id="mo-gauges" aria-label="這個月的四個儀表">
-            <p class="sub">這個月的四個儀表（自己感覺各滿幾成；AI 月度分析會看）</p>
+            <p class="sub">這個月的四個儀表</p>
             ${data.GAUGES.map(([k, l, hint]) => `<label class="mo-gauge" title="${hint}"><span>${l}</span>
               <input type="range" name="${k}" min="0" max="100" step="5" value="50" aria-label="${l}（${hint}）">
               <b data-out="${k}">—</b></label>`).join('')}
@@ -154,7 +153,6 @@ export function mountMonth(root) {
           <label>所屬專案<select name="project_id">${projectOptions(v.project_id || '', { none: '不掛專案' })}</select></label>
           <label>狀態<select name="status">${Object.entries(data.GOAL_STATUS).map(([k, l]) => `<option value="${k}" ${k === v.status ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         </div>
-        <p class="sub">月目標和「專案與目標」是同一份；掛了專案會出現在那張專案卡片。任務的「編輯」裡可以掛上這個目標，進度就會跟著算。</p>
         <div class="dialog-actions">
           ${g ? '<button type="button" class="btn-ghost danger" data-del style="margin-right:auto">刪除</button>' : ''}
           <button type="button" class="btn-ghost" data-cancel>取消</button>
@@ -247,7 +245,6 @@ export function mountMonth(root) {
     migrateCard.innerHTML = `
       <div class="day-head"><h2>遷移</h2><span class="sub">${list.length ? `${list.length} 件過期未完成` : ''}</span></div>
       ${list.length ? `
-      <p class="sub mg-help">月初把過期沒做完的事整理一次：<b>&gt;</b> 遷移到本月、<b>&lt;</b> 排到下個月 1 日、<b>✕</b> 不做了。改的是任務本身，不會複製。</p>
       <div class="mg-bar">
         <label class="check"><input type="checkbox" id="mg-all" ${n && n === list.length ? 'checked' : ''}> 全選</label>
         <label class="mg-daypick">遷移到<input type="date" id="mg-day" min="${t}" max="${to}" value="${keepDay && keepDay >= t && keepDay <= to ? keepDay : t}"></label>
@@ -336,8 +333,8 @@ export function mountMonth(root) {
   function renderStats() {
     const s = data.monthStats({ tasks: state.life.tasks, entries: monthEntries.month === ui.month ? monthEntries.list : [], goals: state.goals, month: ui.month });
     $('#mo-stats', root).innerHTML = `
-      <div class="stat card"><div class="stat-label">完成任務</div><div class="stat-num">${s.doneCount}<small>件</small></div><div class="stat-note">生活，完成日在本月</div></div>
-      <div class="stat card"><div class="stat-label">計時總長</div><div class="stat-num mo-time">${formatHMS(s.timeSec)}</div><div class="stat-note">本月已結束的計時</div></div>
+      <div class="stat card"><div class="stat-label">完成任務</div><div class="stat-num">${s.doneCount}<small>件</small></div></div>
+      <div class="stat card"><div class="stat-label">計時總長</div><div class="stat-num mo-time">${formatHMS(s.timeSec)}</div></div>
       <div class="stat card ${s.goalsTotal ? '' : 'muted'}"><div class="stat-label">月目標達成</div><div class="stat-num">${s.goalsDone}<small>／${s.goalsTotal}</small></div><div class="stat-note">放棄的不算</div></div>`;
   }
 

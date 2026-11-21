@@ -1,14 +1,14 @@
 // M3 日曆（Phase 3）：週／月視圖，任務直接讀 tasks（不另存事件），拖到別天會更新任務
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks } from '../store.js?v=202611212318';
-import { $, esc, toast, areaChip, foldList } from '../ui.js?v=202611212318';
-import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611212318';
-import { taskItemHTML } from './task-item.js?v=202611212318';
-import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611212318';
-import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611212318';
-import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611212318';
-import { bindHabitDays } from './habits.js?v=202611212318';
-import { mountHealthDay } from './health.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks } from '../store.js?v=202611220214';
+import { $, esc, toast, areaChip, foldList } from '../ui.js?v=202611220214';
+import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611220214';
+import { taskItemHTML } from './task-item.js?v=202611220214';
+import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611220214';
+import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611220214';
+import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611220214';
+import { bindHabitDays } from './habits.js?v=202611220214';
+import { mountHealthDay } from './health.js?v=202611220214';
 
 const VIEW_KEY = 'lifeos-cal-view';
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
@@ -44,7 +44,6 @@ export function mountCalendar(root) {
     </header>
     <section class="card cal-card">
       <div class="cal-grid" id="cal-grid"></div>
-      <p class="sub cal-hint">拖曳任務到別天可以改日期（排程的保留原本時刻）；點任務可編輯。</p>
     </section>
     <section class="card">
       <div class="day-head">

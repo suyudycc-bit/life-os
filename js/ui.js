@@ -1,5 +1,5 @@
 // 共用 UI 小工具
-import { formatHMS } from './dates.js?v=202611212318';
+import { formatHMS } from './dates.js?v=202611220214';
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 export function esc(s) {

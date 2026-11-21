@@ -2,11 +2,11 @@
 // 資料庫觸發器在任務往後移時記一筆改期紀錄；store.refreshTasks 看到新的、還沒填原因的紀錄就發 lifeos:tasks-postponed。
 // 這裡在畫面下方問一下原因（點一下、可略過）；同一件延到第 3 次（data.POSTPONE_NUDGE_AT）時，多問要怎麼處理。
 // 只問生活的任務（工作看板換欄也會改日期，那是看板的日常操作，不打擾）。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks } from '../store.js?v=202611212318';
-import { esc, toast, confirmDialog } from '../ui.js?v=202611212318';
-import { formatShort } from '../dates.js?v=202611212318';
-import { openTaskEditor } from './task-actions.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks } from '../store.js?v=202611220214';
+import { esc, toast, confirmDialog } from '../ui.js?v=202611220214';
+import { formatShort } from '../dates.js?v=202611220214';
+import { openTaskEditor } from './task-actions.js?v=202611220214';
 
 const SHOW_MS = 20000; // 沒動作 20 秒自動收起（原因留白）
 let bar = null;
@@ -36,7 +36,7 @@ function open(rows) {
   bar.setAttribute('aria-label', '延期原因');
   const name = tasks.length === 1 ? `「${esc(tasks[0].title.slice(0, 30))}」` : `這 ${tasks.length} 件`;
   bar.innerHTML = `
-    <p class="eb-title">${name}延期了，為什麼？<span class="sub">（點一下就好，可略過）</span></p>
+    <p class="eb-title">${name}延期了，為什麼？</p>
     <div class="pp-reasons">${Object.entries(data.RESCHEDULE_REASONS).map(([k, l]) => `<button type="button" data-reason="${k}">${l}</button>`).join('')}</div>
     ${worst ? `<div class="pp-nudge">
       <p>「${esc(worst.t.title.slice(0, 30))}」已經延第 <b>${worst.history.length}</b> 次了（原本 ${formatShort(worst.history[0].from_day)}）。要換個方式嗎？</p>

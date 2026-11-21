@@ -1,7 +1,7 @@
 // M6 靈感知識庫（Phase 4）：搜尋標題／正文／標籤、依領域分類、#標籤、記錄靈感彈窗
-import * as data from '../data.js?v=202611212318';
-import { state, refreshNotes } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, areaChip, linkify, formatDateTime } from '../ui.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshNotes } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, areaChip, linkify, formatDateTime } from '../ui.js?v=202611220214';
 
 const ui = { q: '', areaId: '', tag: '' };
 
@@ -29,7 +29,6 @@ export function openNoteDialog(note = null, preset = {}) {
       </div>
       <label>正文<textarea name="body" rows="8" placeholder="想法、筆記、連結都可以（網址會自動變成連結）">${esc(n.body || '')}</textarea></label>
       ${note ? `<p class="sub">建立 ${formatDateTime(note.created_at)}・更新 ${formatDateTime(note.updated_at)}</p>` : ''}
-      <p class="sub nt-autosave-hint">會自動儲存，直接關閉也不會遺失。</p>
       <div class="dialog-actions">
         <button type="button" class="btn-ghost danger" data-del style="margin-right:auto" ${note ? '' : 'hidden'}>刪除</button>
         <button type="button" class="btn-ghost" data-close>關閉</button>

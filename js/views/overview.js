@@ -1,18 +1,18 @@
 // M1 總覽（Phase 1：今日完成率、今日待辦數、最重要 3 件事、今日待辦清單）
-import * as data from '../data.js?v=202611212318';
-import { state } from '../store.js?v=202611212318';
-import { $, durationHTML, toast, esc, areaChip, confirmDialog, foldList } from '../ui.js?v=202611212318';
-import { refreshNotes, refreshTasks } from '../store.js?v=202611212318';
-import { habitRowHTML, bindHabitDays } from './habits.js?v=202611212318';
-import { openNoteDialog } from './notes.js?v=202611212318';
-import { openExternalEvent, extTime } from './google-sync.js?v=202611212318';
-import { today, formatShort, localDate, addDays } from '../dates.js?v=202611212318';
-import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611212318';
-import { taskItemHTML } from './task-item.js?v=202611212318';
-import { bindTaskList } from './task-actions.js?v=202611212318';
-import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611212318';
-import { saveInboxFilter } from './inbox.js?v=202611212318';
-import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state } from '../store.js?v=202611220214';
+import { $, durationHTML, toast, esc, areaChip, confirmDialog, foldList } from '../ui.js?v=202611220214';
+import { refreshNotes, refreshTasks } from '../store.js?v=202611220214';
+import { habitRowHTML, bindHabitDays } from './habits.js?v=202611220214';
+import { openNoteDialog } from './notes.js?v=202611220214';
+import { openExternalEvent, extTime } from './google-sync.js?v=202611220214';
+import { today, formatShort, localDate, addDays } from '../dates.js?v=202611220214';
+import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611220214';
+import { taskItemHTML } from './task-item.js?v=202611220214';
+import { bindTaskList } from './task-actions.js?v=202611220214';
+import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611220214';
+import { saveInboxFilter } from './inbox.js?v=202611220214';
+import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611220214';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
@@ -71,7 +71,7 @@ export function mountOverview(root) {
       <div class="card stat">
         <div class="stat-label">今日待辦</div>
         <div class="stat-num" id="ov-todo">0<small>件</small></div>
-        <div class="stat-note">今天到期或排程、尚未完成</div>
+        <div class="stat-note"></div>
       </div>
       <div class="card stat">
         <div class="stat-label">今日用時</div>

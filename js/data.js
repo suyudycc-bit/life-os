@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611212318';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611212318';
+import { supabase } from './supabase.js?v=202611220214';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611220214';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -104,7 +104,8 @@ export async function createArea({ name, kind, color, on_board = false }, areas)
 const TASK_FIELDS = ['title', 'notes', 'area_id', 'project_id', 'goal_id', 'status', 'priority',
   'starred', 'due_date', 'scheduled_start', 'estimate_min', 'sort_order', 'links', 'case_no', 'work_type_id',
   'board_parked', 'work_project_tag_id', // 20261106：看板停在累積未完成、看板專案標籤
-  'is_experiment', 'learning']; // 20261118：小實驗與學到什麼
+  'is_experiment', 'learning', // 20261118：小實驗與學到什麼
+  'board_next_day']; // 20261122：看板「明天也做」
 
 function pickTask(obj) {
   if (obj.links != null) assertWebLinks(obj.links); // 資安 20261111：任務連結只收 http(s)
@@ -645,7 +646,16 @@ export function boardColumns(tasks, areasById, day) {
   }
   for (const id of Object.keys(cols)) cols[id].sort(compareTasks);
   cols.done.sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+  // 20261122「明天也做」：今天在新接／進行中、按過明天也做的，同一張卡在「明天預計」再列一份（不是另一個欄位的資料，只是畫面）
+  const next = nextWorkingDay(day);
+  cols.alsoNext = [...cols.new, ...cols.inprogress].filter((t) => t.board_next_day === next);
   return cols;
+}
+
+/** 「明天也做」開／關：寫 board_next_day＝下一個工作日或清空；核對 1 筆。不動到期日 */
+export async function setBoardNextDay(id, on, day = today()) {
+  const rows = must(await supabase.from('tasks').update({ board_next_day: on ? nextWorkingDay(day) : null }).eq('id', id).select('id'));
+  if (rows.length !== 1) throw new Error(`預期更新 1 筆，實際 ${rows.length} 筆`);
 }
 
 // 有時間的排程換到別天時保留時間（台北時間）

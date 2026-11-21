@@ -1,17 +1,14 @@
 // 工作看板（Phase W2）：手帳風五欄，內容就是「工作」領域的任務（單一來源，見 docs/08）
 // 欄位由任務狀態與日期算出（data.boardColumnOf）；拖到別欄＝改狀態或排程。
-// 舊的 Apps Script 看板保留為「舊看板」切換（嵌入），等 W6 確認不用再拿掉。
-import * as config from '../config.js?v=202611212318';
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212318';
-import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611212318';
-import { today, formatShort, formatHMS } from '../dates.js?v=202611212318';
-import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, openContinueDialog, askSameCase } from './task-actions.js?v=202611212318';
-import { openAreaDialog } from './area-dialog.js?v=202611212318';
-import { mountCases, openPhrases } from './cases.js?v=202611212318';
+// 舊的 Apps Script 看板切換與嵌入已在 20261122 拿掉（使用者：舊看板可以刪了）。
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611220214';
+import { $, esc, toast, linkChip, safeHref, linkFallbackTitle, pastedLink, confirmDialog } from '../ui.js?v=202611220214';
+import { today, formatShort, formatHMS } from '../dates.js?v=202611220214';
+import { openTaskEditor, openMemoDialog, startTimer, workTagsOf, resolveWorkTags, askSameCase } from './task-actions.js?v=202611220214';
+import { openAreaDialog } from './area-dialog.js?v=202611220214';
+import { mountCases, openPhrases } from './cases.js?v=202611220214';
 
-const BOARD_URL = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(config.WORK_BOARD_URL || '')
-  ? config.WORK_BOARD_URL : '';
 const MODE_KEY = 'lifeos-wb-mode';
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const dow = (d) => new Date(`${d}T12:00:00+08:00`).getUTCDay();
@@ -131,20 +128,12 @@ async function copyReport(day = today(), { quiet = false } = {}) {
   }
 }
 
-function legacyHTML() {
-  return BOARD_URL ? `
-    <div class="wb-frame">
-      <iframe src="${esc(BOARD_URL)}" title="舊的每日工作報告看板" loading="lazy" allow="clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe>
-    </div>
-    <p class="sub wb-hint">這是舊的 Apps Script 看板（搬家期間保留）。看不到時按右上角「舊看板 ↗」在新分頁開啟。</p>`
-    : '<section class="card empty-page"><p>沒有設定舊看板網址（config.js 的 WORK_BOARD_URL）。</p></section>';
-}
 
 export function mountWorkBoard(root) {
   let mode = 'board';
   try {
     const saved = localStorage.getItem(MODE_KEY);
-    mode = saved === 'cases' ? 'cases' : saved === 'legacy' && BOARD_URL ? 'legacy' : 'board';
+    mode = saved === 'cases' ? 'cases' : 'board';
   } catch { /* 忽略 */ }
   let casesRender = null;
 
@@ -155,12 +144,10 @@ export function mountWorkBoard(root) {
         <div class="seg" role="group" aria-label="切換看板">
           <button type="button" data-mode="board">看板</button>
           <button type="button" data-mode="cases">案件總覽</button>
-          ${BOARD_URL ? '<button type="button" data-mode="legacy">舊看板</button>' : ''}
         </div>
         <button type="button" class="btn-primary" id="wb-copy">複製每日工作回報</button>
         <button type="button" class="btn-timer" id="wb-phrases">常用詞組</button>
         <button type="button" class="btn-timer" id="wb-settings">列入設定</button>
-        ${BOARD_URL ? `<a class="btn-timer" href="${esc(BOARD_URL)}" target="_blank" rel="noopener">舊看板 ↗</a>` : ''}
       </div>
     </header>
     <div id="wb-body"></div>`;
@@ -290,8 +277,26 @@ export function mountWorkBoard(root) {
       } else startTimer(t);
     }
     if (b.dataset.act === 'done') await moveTo(t.id, 'done');
-    if (b.dataset.act === 'continue') openContinueDialog(t); // 20261111：今日歸今日，接續到明天／累積未完成
+    if (b.dataset.act === 'next') await toggleNext(t); // 20261122：明天也做（取代 ⇢ 接續）
     if (b.dataset.act === 'delete') await deleteCard(t);
+  });
+
+  // 20261122「明天也做」：同一張卡在明天預計多列一份；今天照樣在新接／進行中，不會被標完成
+  async function toggleNext(t) {
+    const on = !alsoNext(t, today());
+    try {
+      await data.setBoardNextDay(t.id, on);
+      await refreshTasks();
+      toast(on ? `明天預計（${formatShort(data.nextWorkingDay(today()))}）也會列這張` : '已從明天預計拿掉');
+    } catch (err) { toast(err.message, true); }
+  }
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-mirror]');
+    if (!b) return;
+    const t = state.tasks.find((x) => x.id === b.closest('.wb-mirror')?.dataset.id);
+    if (!t) return;
+    if (b.dataset.mirror === 'edit') openTaskEditor(t);
+    if (b.dataset.mirror === 'unnext') await toggleNext(t);
   });
 
   // 20261106 W4：卡片可刪除（進垃圾桶，30 天內可在「數據與備份」還原）
@@ -416,6 +421,17 @@ export function mountWorkBoard(root) {
     }
   });
 
+  const alsoNext = (t, day) => t.board_next_day === data.nextWorkingDay(day);
+  /** 「明天預計」裡的同一張卡（今天也在新接／進行中）：只顯示、可編輯、可取消；不能拖 */
+  function mirrorHTML(t) {
+    return `
+      <article class="wb-mirror" data-id="${t.id}">
+        <div class="wb-card-head"><span class="wb-case">${esc(t.case_no || '—')}</span><span class="wb-mirror-tag">今天也在做</span>
+          <button type="button" class="btn-ghost wb-edit" data-mirror="unnext" title="不列在明天預計" aria-label="取消明天也做">✕</button></div>
+        <button type="button" class="wb-title" data-mirror="edit" title="編輯工作">${esc(t.title)}</button>
+      </article>`;
+  }
+
   function cardHTML(t, col, day) {
     const tag = state.workTags.find((w) => w.id === t.work_type_id);
     const ptag = state.workTags.find((w) => w.id === t.work_project_tag_id);
@@ -433,7 +449,9 @@ export function mountWorkBoard(root) {
           <span class="wb-case">${esc(t.case_no || '—')}</span>
           ${due && due !== day ? `<span class="wb-due ${late ? 'late' : ''}">${late ? '已過期 ' : '預定 '}${formatShort(due)}</span>` : ''}
           ${t.starred ? '<span class="wb-star" title="星標">★</span>' : ''}
-          ${col === 'new' || col === 'inprogress' ? '<button type="button" class="btn-ghost wb-cont" data-act="continue" title="今天這張標完成，接續到明天或累積未完成（同案號）" aria-label="接續到明天或累積未完成">⇢ 接續</button>' : ''}
+          ${col === 'new' || col === 'inprogress' ? (alsoNext(t, day)
+            ? '<button type="button" class="btn-ghost wb-cont on" data-act="next" aria-pressed="true" title="明天預計也列這張；再按一次取消">✓ 明天也做</button>'
+            : '<button type="button" class="btn-ghost wb-cont" data-act="next" aria-pressed="false" title="今天照樣在這裡，明天預計也列這張（同一張卡）">＋ 明天也做</button>') : ''}
           <button type="button" class="btn-ghost wb-edit" data-act="edit" title="編輯工作（名稱、連結、種類、日期…）" aria-label="編輯工作">✎</button>
         </div>
         <button type="button" class="wb-title" data-act="edit" title="編輯工作">${esc(t.title)}</button>
@@ -488,11 +506,6 @@ export function mountWorkBoard(root) {
       return;
     }
     casesRender = null;
-    if (mode === 'legacy') {
-      // 舊看板只畫一次，資料更新時不重載 iframe（打到一半的字才不會消失）
-      if (force || !body.querySelector('.wb-frame')) body.innerHTML = legacyHTML();
-      return;
-    }
     if (!data.boardAreas(state.areas).length) {
       body.innerHTML = `<section class="card empty-page">
         <p>工作看板還沒有列入任何領域。選擇哪些領域的任務要放上來（例如 Libo），之後隨時可以在右上角「列入設定」改。</p>
@@ -511,14 +524,13 @@ export function mountWorkBoard(root) {
         <h2 class="wb-group-title">${title}</h2>
         <div class="wb-cols">${data.BOARD_COLUMNS.filter((c) => c.group === g).map((c) => `
           <div class="wb-col" data-col="${c.id}">
-            <header class="wb-col-head"><h3>${c.label}</h3><span class="wb-count">${cols[c.id].length}</span></header>
+            <header class="wb-col-head"><h3>${c.label}</h3><span class="wb-count">${cols[c.id].length + (c.id === 'tomorrow' ? cols.alsoNext.length : 0)}</span></header>
             <p class="wb-hint-line">${c.hint}</p>
             ${c.id === 'new' ? addFormHTML() : ''}
-            <div class="wb-cards">${cols[c.id].map((t) => cardHTML(t, c.id, day)).join('') || '<p class="wb-empty">（空）</p>'}</div>
+            <div class="wb-cards">${c.id === 'tomorrow' ? cols.alsoNext.map(mirrorHTML).join('') : ''}${cols[c.id].map((t) => cardHTML(t, c.id, day)).join('') || (c.id === 'tomorrow' && cols.alsoNext.length ? '' : '<p class="wb-empty">（空）</p>')}</div>
           </div>`).join('')}</div>
       </section>`;
-    body.innerHTML = `<div class="wb-board">${group('today', '本日工作')}${group('next', '後續工作')}</div>
-      <p class="sub wb-hint">拖曳卡片換欄、在同一欄上下拖調順序（也可點卡片後按左右鍵換欄、上下鍵調順序）：拖到「明天預計」會排到 ${formatShort(data.nextWorkingDay(day))}，拖到「累積未完成」會清除日期。點卡片或右上 ✎ 可編輯，「進度」記錄每天做到哪裡；今天沒做完、明天要接著做的按「⇢ 接續」（今天這張算完成，另建同案號的新卡）。</p>`;
+    body.innerHTML = `<div class="wb-board">${group('today', '本日工作')}${group('next', '後續工作')}</div>`;
     // 重畫時保留還沒送出的連結與名稱（貼網址後正在讀標題時也不會中斷）
     const form = body.querySelector('.wb-add');
     if (form && keep) {

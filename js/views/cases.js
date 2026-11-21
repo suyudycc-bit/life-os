@@ -1,10 +1,10 @@
 // 案件總覽（Phase W4，工作看板的第二個分頁）：一個案件＝同案號的所有工作任務（20261111 起可多張卡），含已完成的
 // 搜尋、篩選、排序、案件歷程（進度紀錄＋計時）、重複案件合併。搬自舊看板「案件總覽」（docs/08）。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, linkify, linkChip, formatDateTime } from '../ui.js?v=202611212318';
-import { formatShort, formatHMS, localDate } from '../dates.js?v=202611212318';
-import { openTaskEditor, openMemoDialog, workTagsOf, openContinueDialog } from './task-actions.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, linkify, linkChip, formatDateTime } from '../ui.js?v=202611220214';
+import { formatShort, formatHMS, localDate } from '../dates.js?v=202611220214';
+import { openTaskEditor, openMemoDialog, workTagsOf } from './task-actions.js?v=202611220214';
 
 const PAGE = 50;
 const FILTER_KEY = 'lifeos-cases-filter';
@@ -175,7 +175,6 @@ export async function openCase(taskId) {
         <ul class="cs-entries">${entries.slice(0, 20).map((e) => `<li>${formatDateTime(e.started_at)}<span>${formatHMS(data.entrySeconds(e))}</span></li>`).join('')}</ul></section>` : ''}
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" data-close>關閉</button>
-        ${data.isOpen(t) ? '<button type="button" class="btn-timer" data-continue title="這張標完成，接續到明天或累積未完成（同案號）">⇢ 接續</button>' : ''}
         <button type="button" class="btn-timer" data-memo>新增進度</button>
         <button type="button" class="btn-primary" data-edit>編輯</button>
       </div>
@@ -183,8 +182,6 @@ export async function openCase(taskId) {
   $('[data-close]', dlg).onclick = () => dlg.close();
   $('[data-edit]', dlg).onclick = () => { dlg.close(); openTaskEditor(t); };
   $('[data-memo]', dlg).onclick = () => { dlg.close(); openMemoDialog(t.id); };
-  const cont = $('[data-continue]', dlg);
-  if (cont) cont.onclick = () => { dlg.close(); openContinueDialog(t); };
 }
 
 /** 常用詞組：一鍵複製；可新增、修改、刪除（搬自舊看板） */

@@ -1,9 +1,9 @@
 // M5 每日復盤（Phase 3）：數字全讀 daily_summary 與當天 time_entries（唯讀）；只有文字欄是手寫存檔
 // 顯化規劃・階段一（20261108）：晚上多「里程碑／心想事成」「感恩」兩格；頁首顯示當天的今日身分與肯定語（和總覽同一筆 daily_reviews）
-import * as data from '../data.js?v=202611212318';
-import { state } from '../store.js?v=202611212318';
-import { $, esc, areaChip, linkify, foldList } from '../ui.js?v=202611212318';
-import { today, addDays, formatShort, formatHMS, formatSignedHMS } from '../dates.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state } from '../store.js?v=202611220214';
+import { $, esc, areaChip, linkify, foldList } from '../ui.js?v=202611220214';
+import { today, addDays, formatShort, formatHMS, formatSignedHMS } from '../dates.js?v=202611220214';
 
 const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/auto/+esm';
 let chartLib = null;
@@ -45,12 +45,11 @@ export function mountReview(root) {
     </header>
     <form class="rv-intent" id="rv-intent" aria-label="這天的今日身分與肯定語">
       ${INTENT_FIELDS.map(([k, label, ph]) => `<label><span>${label}</span><input name="${k}" maxlength="200" placeholder="${ph}" autocomplete="off"></label>`).join('')}
-      <p class="sub rv-intent-note">早上在<a href="#/overview">總覽</a>寫的就是這兩格（同一份資料）；也可以在這裡補寫。</p>
     </form>
     <section class="stats stats-4">
       <div class="card stat"><div class="stat-label">任務總數</div><div class="stat-num" id="rv-total">—</div><div class="stat-note">當天完成，或當天到期／排程未完成</div></div>
       <div class="card stat"><div class="stat-label">完成率</div><div class="stat-num" id="rv-rate">—</div><div class="stat-note" id="rv-rate-note"></div></div>
-      <div class="card stat"><div class="stat-label">當日用時</div><div class="stat-num" id="rv-time">—</div><div class="stat-note">當天開始的計時加總</div></div>
+      <div class="card stat"><div class="stat-label">當日用時</div><div class="stat-num" id="rv-time">—</div><div class="stat-note"></div></div>
       <div class="card stat"><div class="stat-label">預計與實際差</div><div class="stat-num" id="rv-diff">—</div><div class="stat-note" id="rv-diff-note"></div></div>
     </section>
     <div class="grid-2">
@@ -71,7 +70,6 @@ export function mountReview(root) {
         <div class="mood-pick" role="group" aria-label="${label}">${[1, 2, 3, 4, 5].map((v) => `
           <button type="button" data-mood="${k}" data-v="${v}" aria-pressed="false" title="${v} ${levels[v]}"><i class="sw ${k === 'mood' ? 'm' : 'e'}${v}" aria-hidden="true"></i>${v}<span class="mood-word"> ${levels[v]}</span></button>`).join('')}
         </div></div>`).join('')}
-      <p class="sub">和「年度手帳」的 Year in Pixels 是同一份；再點一次已選的可以取消。</p>
     </section>
     <section class="card">
       <div class="day-head"><h2>復盤筆記</h2><span class="sub" id="rv-save" role="status"></span></div>
@@ -262,7 +260,7 @@ export function mountReview(root) {
     const diffEl = $('#rv-diff', root);
     diffEl.textContent = s.diffSec == null ? '—' : formatSignedHMS(s.diffSec);
     diffEl.className = `stat-num ${s.diffSec > 0 ? 'over' : ''}`;
-    $('#rv-diff-note', root).textContent = s.diffSec == null ? '當天任務沒有填預計時間' : '當天任務的實際 − 預計；+ 表示超過預計';
+    $('#rv-diff-note', root).textContent = s.diffSec == null ? '當天任務沒有填預計時間' : '';
 
     $('#rv-legend', root).innerHTML = s.areaShare.length
       ? s.areaShare.map((x) => `<li>${areaChip(state.areasById[x.area_id])}<span>${formatHMS(x.sec)}</span><b>${x.pct}%</b></li>`).join('')

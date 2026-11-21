@@ -1,9 +1,9 @@
 // 標籤與分類（#/tags，20261106 G3）：一頁管理領域、看板標籤、各種自由標籤與分類。
 // 資料函式都在 data.js「標籤管理 20261106（E）」段落；這裡只負責顯示與確認。
 // 改名／刪除前先說明會影響幾筆並確認；更新後由資料層檢查實際筆數。
-import * as data from '../data.js?v=202611212318';
-import { state, reloadAll } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, reloadAll } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611220214';
 
 const PALETTE = ['#3b6fd8', '#8a5cd6', '#e08a2e', '#2f9e6b', '#d64f7a', '#1f9bb0', '#7a8b2e', '#b5652b', '#5560c9', '#8f6b4a'];
 const FREE_SCOPES = ['note', 'media', 'bucket', 'inbox', 'contact'];
@@ -59,8 +59,7 @@ export function mountTags(root) {
   const ui = { loading: false, again: false, cache: null };
 
   root.innerHTML = `<div class="tg-page">
-    <header class="page-head"><h1>標籤與分類</h1>
-      <p class="sub">各頁用到的領域、標籤、分類都在這裡整理。改名或刪除前會先告訴你影響幾筆；刪掉的看板標籤 30 天內可以在「數據與備份」的垃圾桶還原。</p></header>
+    <header class="page-head"><h1>標籤與分類</h1></header>
     <nav class="tg-toc" aria-label="本頁目錄" id="tg-toc"></nav>
     <div id="tg-body"><p class="sub">讀取中…</p></div></div>`;
   const page = $('.tg-page', root); // 事件掛在本頁的外層（#main 會給其他頁重用）
@@ -166,8 +165,7 @@ export function mountTags(root) {
       <div class="row">
         <label>類型<select name="kind">${Object.entries(data.AREA_KINDS).map(([k, l]) => `<option value="${k}" ${k === a.kind ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
         <label>顏色<input type="color" name="color" value="${esc(a.color || '#888888')}"></label>
-      </div>
-      <p class="sub">顏色用在任務標籤、日曆與圖表；改名不影響任何資料的歸屬。</p>${actions(area ? '儲存' : '建立')}`, async (f) => {
+      </div>${actions(area ? '儲存' : '建立')}`, async (f) => {
       await data.tagSaveArea({ id: area?.id, name: f.name.value, kind: f.kind.value, color: f.color.value }, state.areas);
       return area ? '已更新領域' : '已新增領域';
     });

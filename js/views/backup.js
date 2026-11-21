@@ -1,11 +1,10 @@
 // M8 數據與備份（Phase 5）：匯出全部資料為 JSON；匯入前顯示筆數並二次確認，只新增、不覆蓋
-import * as data from '../data.js?v=202611212318';
-import { reloadAll } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212318';
-import { isMock } from '../supabase.js?v=202611212318';
-import { state } from '../store.js?v=202611212318';
-import { today } from '../dates.js?v=202611212318';
-import { convertBoardExport } from '../workboard-import.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { reloadAll } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611220214';
+import { isMock } from '../supabase.js?v=202611220214';
+import { state } from '../store.js?v=202611220214';
+import { today } from '../dates.js?v=202611220214';
 
 const LAST_EXPORT_KEY = 'lifeos-last-export';
 
@@ -38,15 +37,6 @@ export function mountBackup(root) {
         <div id="bk-plan"></div>
       </section>
     </div>
-    <section class="card">
-      <h2>從舊工作看板匯入</h2>
-      <p class="sub">把「每日工作報告看板」的工作搬進來：還在看板上的未完成工作＋最近 30 天完成的，連同進度備註、專案標籤、工作種類、Wrap up 與常用詞組。
-        先在看板的 Apps Script 加匯出功能，再打開「看板網址<code>?export=lifeos</code>」下載 <code>work-board-export.json</code>（步驟見 docs/08 第 6 節）。
-        和一般匯入一樣只新增、不覆蓋；同案件編號的工作不會重複。</p>
-      <label class="wb-target">放進哪個領域<select id="wb-area"></select></label>
-      <label class="bk-file"><input type="file" id="wb-file" accept="application/json,.json"></label>
-      <div id="wb-plan"></div>
-    </section>
     <section class="card tr-sec" id="trash">
       <div class="tr-head"><h2>垃圾桶</h2>
         <label class="tr-filter">類型<select id="tr-kind"><option value="">全部</option></select></label></div>
@@ -134,35 +124,6 @@ export function mountBackup(root) {
     }
   };
 
-  const wbBox = $('#wb-plan', root);
-  // 預設放進「列入工作看板」的第一個領域；沒有的話用類型是工作的領域
-  const wbArea = $('#wb-area', root);
-  const preferred = state.areas.find((a) => a.on_board) || state.areas.find((a) => a.kind === 'work');
-  wbArea.innerHTML = state.areas.map((a) => `<option value="${a.id}" ${a.id === preferred?.id ? 'selected' : ''}>${esc(a.name)}${a.on_board ? '（已列入工作看板）' : ''}</option>`).join('');
-  // 換領域要重新產生計畫
-  wbArea.onchange = () => { const input = $('#wb-file', root); if (input.files[0]) input.dispatchEvent(new Event('change')); };
-  $('#wb-file', root).onchange = async (e) => {
-    const file = e.target.files[0];
-    wbBox.innerHTML = '';
-    if (!file) return;
-    try {
-      const raw = await readJson(file);
-      wbBox.innerHTML = '<p class="sub">轉換與比對中…</p>';
-      const { backup, stats } = convertBoardExport(raw, {
-        areas: state.areas, areaId: wbArea.value, projects: state.projects, workTags: await data.listWorkTags(), today: today(),
-      });
-      const plan = await data.planImport(backup);
-      showPlan(wbBox, plan, `
-        <p class="sub">看板資料到 ${esc(stats.latest)}，共 ${stats.cases} 件工作：要搬未完成 ${stats.open} 件、${esc(stats.cutoff)} 之後完成的 ${stats.doneRecent} 件；
-          略過較早完成的 ${stats.skippedOld} 件、已從看板刪除的 ${stats.removed} 件。全部放進「${esc(state.areasById[wbArea.value]?.name || '')}」。
-          ${state.areasById[wbArea.value]?.on_board ? '' : '<b>這個領域還沒列入工作看板</b>，匯入後到工作看板的「列入設定」勾選才看得到。'}</p>
-        ${stats.removedTitles.length ? `<details class="wb-removed"><summary class="sub">看已從看板刪除、不會搬的 ${stats.removed} 件</summary>
-          <ul>${stats.removedTitles.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
-          <p class="sub">如果其中有還要做的，先回舊看板把它放回任一欄，再重新匯出。</p></details>` : ''}`, e.target);
-    } catch (err) {
-      wbBox.innerHTML = `<p class="warn">無法匯入：${esc(err.message)}</p>`;
-    }
-  };
 
   // ===== 垃圾桶（20261106 G2；資料函式在 data.js「垃圾桶」）=====
   const trBox = $('#tr-list', root);

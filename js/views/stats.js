@@ -1,8 +1,8 @@
 // M4 時間統計（Phase 2）：數字卡、近 7 天長條圖、領域占比、本週任務預計與實際、手動補記、計時紀錄
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611212318';
-import { today, addDays, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, areaChip, durationHTML } from '../ui.js?v=202611220214';
+import { today, addDays, formatShort, formatMin, formatHMS, formatSignedHMS, formatTime, localDate, fromLocalInput, toLocalInput } from '../dates.js?v=202611220214';
 
 // Chart.js 固定版本，從 jsDelivr 載入（CLAUDE.md 技術棧）
 const CHART_CDN = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/auto/+esm';
@@ -21,8 +21,8 @@ export function mountStats(root) {
     <header class="page-head"><h1>時間統計</h1><p class="sub" id="st-range"></p></header>
     <section class="stats stats-4">
       <div class="card stat"><div class="stat-label">今日累計</div><div class="stat-num" id="st-today"></div><div class="stat-note" id="st-today-note"></div></div>
-      <div class="card stat"><div class="stat-label">本週累計</div><div class="stat-num" id="st-week"></div><div class="stat-note" id="st-week-note">週一到週日，所有計時加總</div></div>
-      <div class="card stat"><div class="stat-label">本週預計</div><div class="stat-num" id="st-est"></div><div class="stat-note">本週任務的預計時間加總</div></div>
+      <div class="card stat"><div class="stat-label">本週累計</div><div class="stat-num" id="st-week"></div><div class="stat-note" id="st-week-note"></div></div>
+      <div class="card stat"><div class="stat-label">本週預計</div><div class="stat-num" id="st-est"></div><div class="stat-note"></div></div>
       <div class="card stat"><div class="stat-label">預計與實際差</div><div class="stat-num" id="st-diff"></div><div class="stat-note" id="st-diff-note"></div></div>
     </section>
     <div class="grid-2">
@@ -54,7 +54,6 @@ export function mountStats(root) {
         <div><h3>延期原因</h3><ol id="sc-reasons"></ol></div>
         <div><h3>一直被延的（還沒做完）</h3><ul id="sc-repeat"></ul></div>
       </div>
-      <p class="sub">準時＝完成那天沒有晚於「原本的期限」（第一次排的日期）。改期紀錄從 2026/11/21 開始，之前改過日期的任務，原本的期限只能用最後的日期算。</p>
     </section>
     <div class="grid-2">
       <section class="card">

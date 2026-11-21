@@ -1,11 +1,11 @@
 // 跟進對象（20261106，C1）：名單依階段分組、聯絡紀錄時間軸、今天該跟進、階段設定、心法筆記。
 // 資料在 contact_stages／contacts／contact_logs（不在 store，這頁自己讀）；計算都在 data.js（跟進對象段落）。
 // 階段、提醒天數、聯絡類型都可自訂；預設值只是起點，不代表任何老師的心法（docs/11 Q2）。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshNotes } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js?v=202611212318';
-import { openNoteDialog } from './notes.js?v=202611212318';
-import { today, formatShort } from '../dates.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshNotes } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog, linkify, formatDateTime } from '../ui.js?v=202611220214';
+import { openNoteDialog } from './notes.js?v=202611220214';
+import { today, formatShort } from '../dates.js?v=202611220214';
 
 const TAB_KEY = 'lifeos-contacts-tab';
 
@@ -74,7 +74,6 @@ export function mountContacts(root) {
     <div id="ct-notes-tab" hidden>
       <section class="card">
         <div class="day-head"><h2>心法筆記</h2><button type="button" class="btn-primary" id="ct-note-new">＋ 新增筆記</button></div>
-        <p class="sub">這裡的筆記存在「靈感知識庫」，標籤是 #${esc(data.CONTACT_NOTE_TAG)}；兩邊看到的是同一則。</p>
       </section>
       <div class="nt-grid" id="ct-notes"></div>
     </div>

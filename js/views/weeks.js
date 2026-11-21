@@ -2,10 +2,10 @@
 // 一列＝一歲、一格＝一週（data.lifeWeekOf）。每格的內容不另存，彙整那幾天的每日復盤（心情、里程碑、感恩、收獲）
 // 與完成的生活任務；未來的格子標出目標期限與 Future Log。生日存在登入帳號（data.getLifeSettings）。
 // 數字都由 data.lifeWeeksSummary 算，這裡只顯示。
-import * as data from '../data.js?v=202611212318';
-import { state } from '../store.js?v=202611212318';
-import { $, esc, toast } from '../ui.js?v=202611212318';
-import { today, formatShort } from '../dates.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state } from '../store.js?v=202611220214';
+import { $, esc, toast } from '../ui.js?v=202611220214';
+import { today, formatShort } from '../dates.js?v=202611220214';
 
 const W = data.LIFE_WEEKS_PER_ROW;
 const range = (birth, k) => { const [a, w] = k.split('-').map(Number); return data.lifeWeekRange(birth, a, w); };
@@ -15,7 +15,7 @@ const moodClass = (m) => (m == null ? '' : ` m${Math.min(5, Math.max(1, Math.rou
 export function mountWeeks(root) {
   root.innerHTML = `
     <header class="page-head cal-head">
-      <div><h1>人生週格</h1><p class="sub">一列是一歲，一格是一週。格子的內容來自每日復盤，不用另外寫。</p></div>
+      <div><h1>人生週格</h1></div>
       <div class="cal-tools">
         <button class="btn-timer" id="lw-book" hidden>翻閱</button>
         <button class="btn-ghost" id="lw-set" hidden>設定生日</button>
@@ -54,7 +54,6 @@ export function mountWeeks(root) {
     body.innerHTML = `
       <section class="card lw-setup">
         <h2>先告訴我你的生日</h2>
-        <p class="sub">用來把一生畫成一週一格。存在你的登入帳號裡，只有你看得到，換裝置也一樣。</p>
         ${settingsForm()}
       </section>`;
     bindForm($('form', body));
@@ -129,7 +128,6 @@ export function mountWeeks(root) {
           <span><i class="lw-c future mark"></i>有目標期限或 Future Log</span>
         </div>
         <div class="lw-grid" role="img" aria-label="${now.age} 歲，人生第 ${sum.lived + 1} 週，還有大約 ${sum.remaining} 週">${rows.join('')}</div>
-        <p class="sub">點任何一格看那一週。左邊的數字是歲數。</p>
       </section>`;
   }
 

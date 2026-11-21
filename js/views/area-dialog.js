@@ -1,6 +1,6 @@
 // 新增領域視窗；回傳建立的領域，取消則回傳 null
-import * as data from '../data.js?v=202611212318';
-import { $, esc, toast } from '../ui.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { $, esc, toast } from '../ui.js?v=202611220214';
 
 const PALETTE = ['#d64f7a', '#1f9bb0', '#7a8b2e', '#b5652b', '#5560c9', '#8f6b4a'];
 
@@ -19,7 +19,6 @@ export function openAreaDialog(areas, { onBoard = false } = {}) {
         <label>顏色<input type="color" name="color" value="${color}"></label>
       </div>
       <label class="check"><input type="checkbox" name="on_board" ${onBoard ? 'checked' : ''}> 列入工作看板（之後可在工作看板的「列入設定」改）</label>
-      <p class="sub">類型用於之後的統計分組；顏色會用在任務標籤、日曆與圖表。</p>
       <div class="dialog-actions">
         <button type="button" class="btn-ghost" data-cancel>取消</button>
         <button class="btn-primary">建立</button>

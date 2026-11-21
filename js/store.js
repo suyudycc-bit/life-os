@@ -1,5 +1,5 @@
 // 畫面共用狀態：只快取從資料庫讀回的資料，不自行產生衍生數字
-import * as data from './data.js?v=202611212318';
+import * as data from './data.js?v=202611220214';
 
 export const state = { areas: [], areasById: {}, tasks: [], memosByTask: {}, entries: [], running: null, summary: null,
   reschedules: null, reschedulesByTask: {}, // 20261121 改期紀錄（null＝還沒讀過，第一次讀不算「新的延期」）

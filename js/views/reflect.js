@@ -1,10 +1,10 @@
 // 內在整理（顯化規劃・階段三，20261108）：轉念／釋放／我允許三種便籤，共用 reflections 表。
 // 資料不在 store，這頁自己讀；儲存、篩選、統計、轉任務都在 data.js「內在整理 20261108」，這裡只負責畫面。
-import * as data from '../data.js?v=202611212318';
-import { state, refreshTasks } from '../store.js?v=202611212318';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212318';
-import { openTaskEditor } from './task-actions.js?v=202611212318';
-import { today } from '../dates.js?v=202611212318';
+import * as data from '../data.js?v=202611220214';
+import { state, refreshTasks } from '../store.js?v=202611220214';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611220214';
+import { openTaskEditor } from './task-actions.js?v=202611220214';
+import { today } from '../dates.js?v=202611220214';
 
 const FILTER_KEY = 'lifeos-reflect-filter';
 const KIND_HINT = {
@@ -183,7 +183,7 @@ export function mountReflect(root) {
             </div>
             ${scaleHTML('intensity_before', '開始時的強度', r.intensity_before ?? null)}
             ${scaleHTML('intensity_after', '結束時的強度', r.intensity_after ?? null)}
-            <p class="sub rf-scale-note">0＝完全平靜，10＝最強烈；再點一次已選的可以取消。</p>
+            <p class="sub rf-scale-note">0 平靜～10 最強烈</p>
           </div>
           ${fieldsHTML(r, FORMS.release3)}
           <fieldset class="rf-group"><legend>順便記下這天的心情？（可不選；和每日復盤、年度手帳同一份）</legend>
@@ -299,7 +299,6 @@ export function mountReflect(root) {
           ${state.areas.map((a) => `<option value="${a.id}" ${a.id === r.area_id ? 'selected' : ''}>${esc(a.name)}${a.on_board ? '（工作看板）' : ''}</option>`).join('')}
         </select></label>
         <label>到期日<input type="date" name="due_date"></label>
-        <p class="sub">任務的說明會記下來自哪張便籤；便籤上會顯示連到這件任務。</p>
         <div class="dialog-actions">
           <button type="button" class="btn-ghost" data-cancel>取消</button>
           <button class="btn-primary">建立任務</button>
