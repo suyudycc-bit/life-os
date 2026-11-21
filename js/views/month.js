@@ -1,12 +1,12 @@
 // 月度手帳（Phase J）：bullet journal 的月誌——月目標、本月一覽（日期直列）、遷移、月回顧。
 // 只讀生活的任務（state.life）；目標是同一份 goals（period＝'YYYY-MM'），「專案與目標」看得到同一筆。
 // 網址：#/month＝本月；#/month/2026-10＝指定月份（年度頁等其他頁可以直接連進來）。
-import * as data from '../data.js?v=202611211924';
-import { state, refreshTasks, refreshProjects } from '../store.js?v=202611211924';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611211924';
-import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611211924';
-import { openTaskEditor } from './task-actions.js?v=202611211924';
-import { projectOptions, goalProjectTag } from './projects.js?v=202611211924';
+import * as data from '../data.js?v=202611212008';
+import { state, refreshTasks, refreshProjects } from '../store.js?v=202611212008';
+import { $, esc, toast, confirmDialog, areaChip, foldList } from '../ui.js?v=202611212008';
+import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611212008';
+import { openTaskEditor } from './task-actions.js?v=202611212008';
+import { projectOptions, goalProjectTag } from './projects.js?v=202611212008';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const SAVE_DELAY = 800; // 月回顧：停止輸入多久後自動儲存（毫秒）
@@ -346,7 +346,7 @@ export function mountMonth(root) {
     const j = data.monthJournal(state.life.tasks, ui.month, events.year === ui.month.slice(0, 4) ? events.list : []);
     $('#mo-undated', root).innerHTML = j.undated.map((e) => `<li class="mo-ev"><span class="bj" aria-hidden="true">○</span>${esc(e.title)}<span class="sub">本月</span></li>`).join('');
     $('#mo-days', root).innerHTML = j.days.map((d) => `
-      <li class="mo-day ${d.day === t ? 'is-today' : ''} ${d.weekend ? 'is-weekend' : ''} ${d.day < t ? 'is-past' : ''}">
+      <li data-day="${d.day}" class="mo-day ${d.day === t ? 'is-today' : ''} ${d.weekend ? 'is-weekend' : ''} ${d.day < t ? 'is-past' : ''}">
         <span class="mo-date"><b>${Number(d.day.slice(8))}</b><i>${WEEKDAYS[d.dow]}</i>${d.day === t ? '<span class="today-dot">今天</span>' : ''}</span>
         <ul class="mo-items">
           ${d.events.map((e) => `<li class="mo-ev"><span class="bj" aria-hidden="true">○</span>${esc(e.title)}</li>`).join('')}
@@ -359,6 +359,8 @@ export function mountMonth(root) {
           }).join('')}
         </ul>
       </li>`).join('');
+    // 20261121：一天的事太多時只先列 6 件（一天一列的月誌，不讓某一天拉成一大段）
+    root.querySelectorAll('#mo-days .mo-day').forEach((li) => foldList($('.mo-items', li), 6, { key: `mo-${li.dataset.day}`, unit: '件' }));
   }
 
   function renderGoals() {

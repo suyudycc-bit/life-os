@@ -1,17 +1,17 @@
 // M1 總覽（Phase 1：今日完成率、今日待辦數、最重要 3 件事、今日待辦清單）
-import * as data from '../data.js?v=202611211924';
-import { state } from '../store.js?v=202611211924';
-import { $, durationHTML, toast, esc, areaChip, confirmDialog } from '../ui.js?v=202611211924';
-import { refreshNotes, refreshTasks } from '../store.js?v=202611211924';
-import { habitRowHTML, bindHabitDays } from './habits.js?v=202611211924';
-import { openNoteDialog } from './notes.js?v=202611211924';
-import { openExternalEvent, extTime } from './google-sync.js?v=202611211924';
-import { today, formatShort, localDate, addDays } from '../dates.js?v=202611211924';
-import { taskItemHTML } from './task-item.js?v=202611211924';
-import { bindTaskList } from './task-actions.js?v=202611211924';
-import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611211924';
-import { saveInboxFilter } from './inbox.js?v=202611211924';
-import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611211924';
+import * as data from '../data.js?v=202611212008';
+import { state } from '../store.js?v=202611212008';
+import { $, durationHTML, toast, esc, areaChip, confirmDialog, foldList } from '../ui.js?v=202611212008';
+import { refreshNotes, refreshTasks } from '../store.js?v=202611212008';
+import { habitRowHTML, bindHabitDays } from './habits.js?v=202611212008';
+import { openNoteDialog } from './notes.js?v=202611212008';
+import { openExternalEvent, extTime } from './google-sync.js?v=202611212008';
+import { today, formatShort, localDate, addDays } from '../dates.js?v=202611212008';
+import { taskItemHTML } from './task-item.js?v=202611212008';
+import { bindTaskList } from './task-actions.js?v=202611212008';
+import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611212008';
+import { saveInboxFilter } from './inbox.js?v=202611212008';
+import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611212008';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
@@ -499,6 +499,7 @@ export function mountOverview(root) {
     $('#ov-list', root).innerHTML = todo.length
       ? todo.map((t) => taskItemHTML(t, state.areasById, { actions: false, memos: state.memosByTask[t.id], running: state.running })).join('')
       : '<li class="empty">今天沒有待辦了，到「任務管理」新增或安排一件事吧。</li>';
+    foldList($('#ov-list', root), 5, { unit: '件' }); // 20261121：和「最重要的 3 件事」並排，太長會拉出一大片空白
     const groups = data.activeProjectsByArea(state.life.projects, state.life.areas);
     $('#ov-projects', root).innerHTML = groups.length ? `<div class="ovp-grid">${groups.map((g) => `
       <div class="ovp-area">${areaChip(g.area)}
@@ -512,6 +513,7 @@ export function mountOverview(root) {
     const hs = data.habitStats(state.habits.filter((h) => !h.archived), state.habitLogs, day);
     $('#ov-habits', root).innerHTML = hs.length ? hs.map((x) => habitRowHTML(x, { compact: true })).join('')
       : '<li class="empty">還沒有習慣。到「習慣養成」新增一個吧。</li>';
+    foldList($('#ov-habits', root), 6, { unit: '個習慣' });
 
   };
 }

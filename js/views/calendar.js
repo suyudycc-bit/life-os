@@ -1,15 +1,16 @@
 // M3 日曆（Phase 3）：週／月視圖，任務直接讀 tasks（不另存事件），拖到別天會更新任務
-import * as data from '../data.js?v=202611211924';
-import { state, refreshTasks } from '../store.js?v=202611211924';
-import { $, esc, toast } from '../ui.js?v=202611211924';
-import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611211924';
-import { taskItemHTML } from './task-item.js?v=202611211924';
-import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611211924';
-import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611211924';
+import * as data from '../data.js?v=202611212008';
+import { state, refreshTasks } from '../store.js?v=202611212008';
+import { $, esc, toast } from '../ui.js?v=202611212008';
+import { today, addDays, weekStart, formatShort, formatTime } from '../dates.js?v=202611212008';
+import { taskItemHTML } from './task-item.js?v=202611212008';
+import { bindTaskList, openTaskEditor } from './task-actions.js?v=202611212008';
+import { openGoogleSyncDialog, openExternalEvent, extTime } from './google-sync.js?v=202611212008';
 
 const VIEW_KEY = 'lifeos-cal-view';
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'];
 const MONTH_MAX = 3; // 月視圖每格最多顯示幾筆
+const WEEK_MAX = 8; // 20261121：週視圖每格最多幾筆（其他天不被拉出一大片空白；點那天看全部）
 
 const ui = { view: 'week', anchor: today(), selected: today() };
 // Google 會議（唯讀）：依目前顯示的範圍讀一次，範圍改變或同步後才重讀
@@ -242,8 +243,9 @@ export function mountCalendar(root) {
         const list = items[d] || [];
         const exts = extDays[d] || [];
         // 月視圖每格最多 MONTH_MAX 筆，會議先放
-        const extShown = ui.view === 'month' ? exts.slice(0, MONTH_MAX) : exts;
-        const shown = ui.view === 'month' ? list.slice(0, Math.max(0, MONTH_MAX - extShown.length)) : list;
+        const cap = ui.view === 'month' ? MONTH_MAX : WEEK_MAX;
+        const extShown = exts.slice(0, cap);
+        const shown = list.slice(0, Math.max(0, cap - extShown.length));
         const more = list.length + exts.length - shown.length - extShown.length;
         const cls = ['cal-day', d === t ? 'is-today' : '', d === ui.selected ? 'is-selected' : '',
           month && d.slice(0, 7) !== month ? 'is-other' : ''].join(' ');

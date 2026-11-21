@@ -1,11 +1,11 @@
 // M2 任務管理（Phase 1：建立、列表、篩選、星標、編輯、刪除、完成；計時於 Phase 2）
-import * as data from '../data.js?v=202611211924';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611211924';
-import { $, esc, toast, PRIORITY } from '../ui.js?v=202611211924';
-import { today } from '../dates.js?v=202611211924';
-import { taskItemHTML } from './task-item.js?v=202611211924';
-import { bindTaskList } from './task-actions.js?v=202611211924';
-import { openAreaDialog } from './area-dialog.js?v=202611211924';
+import * as data from '../data.js?v=202611212008';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611212008';
+import { $, esc, toast, PRIORITY } from '../ui.js?v=202611212008';
+import { today } from '../dates.js?v=202611212008';
+import { taskItemHTML } from './task-item.js?v=202611212008';
+import { bindTaskList } from './task-actions.js?v=202611212008';
+import { openAreaDialog } from './area-dialog.js?v=202611212008';
 
 const ADD_AREA = '__add__';
 

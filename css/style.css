@@ -2486,3 +2486,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 .ov-lifeweek { display: inline-block; text-decoration: none; }
 .ov-lifeweek:hover { text-decoration: underline; }
+
+/* 只給螢幕閱讀器讀的文字 */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* 保健食品（20261121）：時段只在表頭寫一次、一種一列，十幾種也只多十幾行 */
+.hl-supp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.hl-supp-table th, .hl-supp-table td { padding: 5px 4px; border-top: 1px dashed var(--line); }
+.hl-supp-table thead th { border-top: 0; font-size: 12.5px; font-weight: 500; color: var(--sub); text-align: center; padding-top: 0; }
+.hl-supp-table tbody th { text-align: left; font-weight: 400; width: 100%; }
+.hl-supp-table tbody th .sub { margin-left: 6px; font-size: 12.5px; }
+.hl-supp-table td { text-align: center; min-width: 40px; }
+.hl-supp-table input[type=checkbox] { width: 18px; height: 18px; margin: 0; vertical-align: middle; }
+.hl-na { color: var(--mute); }
+.day-head h2 .sub { font-family: var(--f-num); font-size: 14px; font-weight: 400; margin-left: 4px; }
+/* 長清單收合的按鈕（ui.foldList） */
+.fold-more { display: block; margin: 6px 0 0; font-size: 13px; padding: 2px 8px; }

@@ -1,5 +1,5 @@
 // 共用 UI 小工具
-import { formatHMS } from './dates.js?v=202611211924';
+import { formatHMS } from './dates.js?v=202611212008';
 export const $ = (sel, root = document) => root.querySelector(sel);
 
 export function esc(s) {
@@ -143,4 +143,31 @@ export function setNavBadge(routeId, n, label = '') {
 /** 是不是預覽版（GitHub Pages 的 …/life-os/preview/，docs/15）：路徑裡有一段剛好叫 preview */
 export function isPreviewPath(pathname) {
   return String(pathname || '').split('/').includes('preview');
+}
+
+// ===== 長清單收合（20261121，使用者：「保健品一多，空間被拉大好多……避免這類型的問題再發生」）=====
+// 規則（docs/03「清單長度」）：和別的卡片並排、或會隨資料一直變長的清單，只先顯示前 limit 項，
+// 後面收起來，給一個「顯示其餘 n 項」按鈕；多 1 項就不收（收起來只省一行，反而多一個按鈕）。
+// 每次重畫清單後呼叫一次；展開狀態依 key 記在這次開啟的頁面（重畫不會又收回去，重新整理才恢復）。
+const unfoldedLists = new Set();
+export function foldList(list, limit, { key = list?.id, unit = '項' } = {}) {
+  if (!list) return;
+  const old = list.nextElementSibling;
+  if (old?.classList.contains('fold-more')) old.remove();
+  const items = [...list.children].filter((li) => !li.classList.contains('empty'));
+  items.forEach((li) => { li.hidden = false; });
+  if (items.length <= limit + 1) return;
+  const open = unfoldedLists.has(key);
+  if (!open) items.slice(limit).forEach((li) => { li.hidden = true; });
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn-ghost fold-more';
+  btn.setAttribute('aria-expanded', String(open));
+  btn.textContent = open ? '收起' : `顯示其餘 ${items.length - limit} ${unit}`;
+  btn.onclick = () => {
+    if (open) unfoldedLists.delete(key); else unfoldedLists.add(key);
+    foldList(list, limit, { key, unit });
+    if (open) list.scrollIntoView({ block: 'nearest' });
+  };
+  list.after(btn);
 }

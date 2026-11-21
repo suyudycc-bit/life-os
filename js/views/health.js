@@ -1,8 +1,8 @@
 // 飲食與保健（20261116，來自回饋 ec337946）：每天的飲食紀錄＋保健食品打勾，下方是近 7 天統計。
 // 資料在 meal_logs、supplements、supplement_logs（不在 store，這頁自己讀）；存取與統計都在 data.js「飲食與保健」段。
-import * as data from '../data.js?v=202611211924';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611211924';
-import { today, addDays, formatShort } from '../dates.js?v=202611211924';
+import * as data from '../data.js?v=202611212008';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611212008';
+import { today, addDays, formatShort } from '../dates.js?v=202611212008';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const dow = (d) => new Date(`${d}T00:00:00`).getDay();
@@ -38,7 +38,7 @@ export function mountHealth(root) {
         <div id="hl-meals"></div>
       </section>
       <section class="card">
-        <div class="day-head"><h2>保健食品</h2><button type="button" class="btn-ghost" id="hl-supp-new">＋ 新增保健食品</button></div>
+        <div class="day-head"><h2>保健食品 <span class="sub" id="hl-supp-n"></span></h2><button type="button" class="btn-ghost" id="hl-supp-new">＋ 新增保健食品</button></div>
         <div id="hl-supps"></div>
       </section>
     </div>
@@ -199,9 +199,19 @@ export function mountHealth(root) {
     // 保健食品
     const active = supps.filter((s) => s.active);
     const taken = new Set(logs.filter((l) => l.log_date === d).map((l) => `${l.supplement_id}|${l.slot}`));
-    $('#hl-supps', root).innerHTML = active.length ? `<ul class="hl-supp-list">${active.map((s) => `
-      <li><div class="hl-supp-name"><button type="button" class="hl-link" data-supp-edit="${s.id}" title="修改">${esc(s.name)}</button>${s.dose ? `<span class="sub">${esc(s.dose)}</span>` : ''}${s.note ? `<small class="sub">${esc(s.note)}</small>` : ''}</div>
-        <div class="hl-slot-checks">${s.slots.map((sl) => `<label class="check"><input type="checkbox" data-take="${s.id}|${sl}" ${taken.has(`${s.id}|${sl}`) ? 'checked' : ''}> ${data.SUPP_SLOTS[sl]}</label>`).join('')}</div></li>`).join('')}</ul>`
+    // 20261121（使用者：保健食品一多，空間被拉很長）：改成表格——時段只在表頭寫一次，一種保健食品一列
+    const slotKeys = Object.keys(data.SUPP_SLOTS).filter((sl) => active.some((s) => s.slots.includes(sl)));
+    const due = active.reduce((n, s) => n + s.slots.length, 0);
+    const done = active.reduce((n, s) => n + s.slots.filter((sl) => taken.has(`${s.id}|${sl}`)).length, 0);
+    $('#hl-supp-n', root).textContent = due ? `${done}／${due}` : '';
+    $('#hl-supps', root).innerHTML = active.length ? `<table class="hl-supp-table">
+      <thead><tr><th scope="col"><span class="sr-only">保健食品</span></th>${slotKeys.map((sl) => `<th scope="col">${data.SUPP_SLOTS[sl]}</th>`).join('')}</tr></thead>
+      <tbody>${active.map((s) => `<tr>
+        <th scope="row"><button type="button" class="hl-link" data-supp-edit="${s.id}" title="${esc(s.note ? `${s.note}（點一下修改）` : '點一下修改')}">${esc(s.name)}</button>${s.dose ? `<span class="sub">${esc(s.dose)}</span>` : ''}</th>
+        ${slotKeys.map((sl) => `<td>${s.slots.includes(sl)
+          ? `<input type="checkbox" data-take="${s.id}|${sl}" ${taken.has(`${s.id}|${sl}`) ? 'checked' : ''} aria-label="${esc(s.name)} ${data.SUPP_SLOTS[sl]}">`
+          : '<span class="hl-na" aria-hidden="true">·</span>'}</td>`).join('')}
+      </tr>`).join('')}</tbody></table>`
       : '<p class="empty">還沒有保健食品。按右上「＋ 新增保健食品」設定名稱和什麼時候吃，之後每天在這裡打勾。</p>';
     const off = supps.filter((s) => !s.active);
     if (off.length) $('#hl-supps', root).insertAdjacentHTML('beforeend', `<p class="sub hl-off">已停用：${off.map((s) => `<button type="button" class="hl-link" data-supp-edit="${s.id}">${esc(s.name)}</button>`).join('、')}</p>`);
