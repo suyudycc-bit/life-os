@@ -1,7 +1,7 @@
 // M6 靈感知識庫（Phase 4）：搜尋標題／正文／標籤、依領域分類、#標籤、記錄靈感彈窗
-import * as data from '../data.js?v=202611220224';
-import { state, refreshNotes } from '../store.js?v=202611220224';
-import { $, esc, toast, confirmDialog, areaChip, linkify, formatDateTime } from '../ui.js?v=202611220224';
+import * as data from '../data.js?v=202611221644';
+import { state, refreshNotes } from '../store.js?v=202611221644';
+import { $, esc, toast, confirmDialog, areaChip, linkify, formatDateTime } from '../ui.js?v=202611221644';
 
 const ui = { q: '', areaId: '', tag: '' };
 

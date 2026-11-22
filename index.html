@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- 資安 20261111（C）：GitHub Pages 不能設回應標頭，所以用 meta CSP。各來源的理由見 docs/09-publish.md「CSP」；
        改這行時 scripts/build-site.sh 會檢查它還在。frame-ancestors 在 meta 無效，防嵌入由 js/frame-guard.js 處理 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org https://itunes.apple.com https://cdn.jsdelivr.net; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net/npm/@supabase/ https://cdn.jsdelivr.net/npm/@kurkle/color@0.3.4/ https://cdn.jsdelivr.net/npm/chart.js@4.5.1/ https://cdn.jsdelivr.net/npm/iceberg-js@0.8.1/ https://cdn.jsdelivr.net/npm/tslib@2.8.1/ https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/ https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/ 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://openlibrary.org https://itunes.apple.com https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/ https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0/ https://cdn.jsdelivr.net/npm/@tesseract.js-data/; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>Why Am I Here?</title>
   <meta name="theme-color" content="#173b34">
   <!-- 網站圖示：相對路徑（GitHub Pages 在 /life-os/ 子路徑下）；PNG 由 favicon.svg 以 macOS qlmanage／sips 轉出 -->
@@ -19,9 +19,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=LXGW+WenKai+TC:wght@400;700&family=LXGW+WenKai+Mono+TC:wght@400;700&family=Chiron+GoRound+TC:wght@400..700&display=swap">
-  <link rel="stylesheet" href="css/style.css?v=202611220224">
+  <link rel="stylesheet" href="css/style.css?v=202611221644">
   <!-- 外觀主題（20261117）：同步執行，畫面出來前先套好主題；霞鶩文楷 Mono（暖米白）、Chiron GoRound（簡潔白、深色夜間）只在選了那個主題時才會下載字型檔 -->
-  <script src="js/theme-boot.js?v=202611220224"></script>
+  <script src="js/theme-boot.js?v=202611221644"></script>
 </head>
 <body>
   <!--
@@ -83,6 +83,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script type="module" src="js/app.js?v=202611220224"></script>
+  <script type="module" src="js/app.js?v=202611221644"></script>
 </body>
 </html>

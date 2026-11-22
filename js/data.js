@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611220224';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611220224';
+import { supabase } from './supabase.js?v=202611221644';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611221644';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));

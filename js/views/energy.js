@@ -1,8 +1,8 @@
 // 好時光日誌（20261118，docs/16 A）：停止計時或打勾完成時，畫面下方問「投入／能量」兩下就好，可略過；
 // 小實驗任務完成時，順便問「學到什麼」。資料層在停止計時與完成時發出 lifeos:activity-ended，這裡接。
-import * as data from '../data.js?v=202611220224';
-import { state } from '../store.js?v=202611220224';
-import { esc, toast } from '../ui.js?v=202611220224';
+import * as data from '../data.js?v=202611221644';
+import { state } from '../store.js?v=202611221644';
+import { esc, toast } from '../ui.js?v=202611221644';
 
 const SHOW_MS = 15000; // 沒動作 15 秒自動收起
 let bar = null;
