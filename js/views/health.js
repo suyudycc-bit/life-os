@@ -1,8 +1,8 @@
 // 飲食與保健（20261116，來自回饋 ec337946）：每天的飲食紀錄＋保健食品打勾，下方是近 7 天統計。
 // 資料在 meal_logs、supplements、supplement_logs（不在 store，這頁自己讀）；存取與統計都在 data.js「飲食與保健」段。
-import * as data from '../data.js?v=202611242148';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242148';
-import { today, addDays, formatShort } from '../dates.js?v=202611242148';
+import * as data from '../data.js?v=202611242202';
+import { $, esc, toast, confirmDialog, safeHref } from '../ui.js?v=202611242202';
+import { today, addDays, formatShort } from '../dates.js?v=202611242202';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const dow = (d) => new Date(`${d}T00:00:00`).getDay();
@@ -114,11 +114,44 @@ function buildHealth(root, { page, day = today() }) {
       toast(err.message, true);
     } finally { cb.disabled = false; }
   });
-  $('#hl-supps', root).addEventListener('click', (e) => {
+  $('#hl-supps', root).addEventListener('click', async (e) => {
     const b = e.target.closest('[data-supp-edit]');
     const sp = b && supps.find((x) => x.id === b.dataset.suppEdit);
-    if (sp) openSuppDialog(sp);
+    if (sp) { openSuppDialog(sp); return; }
+    // 20261124（回饋 419309a3）：實際吃的時間可以改、額外補充可以加／刪
+    const t = e.target.closest('[data-log-time]');
+    if (t) { const log = logs.find((l) => l.id === t.dataset.logTime); if (log) openTimeDialog(log); return; }
+    const x = e.target.closest('[data-extra]');
+    const del = e.target.closest('[data-log-del]');
+    try {
+      if (x) { x.disabled = true; await data.addSupplementExtra(x.dataset.extra, ui.day); await load(); toast(ui.day === today() ? `已記一筆額外補充（${data.taipeiNowHM()}）` : '已記一筆額外補充，點時間可以補上幾點吃的'); }
+      if (del && (await confirmDialog('刪除這筆額外補充？', '刪除'))) { await data.deleteSupplementLog(del.dataset.logDel); await load(); }
+    } catch (err) { toast(err.message, true); } finally { if (x) x.disabled = false; }
   });
+
+  function openTimeDialog(log) {
+    const dlg = dialogEl();
+    const sp = supps.find((s) => s.id === log.supplement_id);
+    const due = sp?.slot_times?.[log.slot];
+    dlg.innerHTML = `
+      <form class="hl-form">
+        <h2>實際吃的時間</h2>
+        <p class="sub">${esc(sp?.name || '')}・${log.slot === 'extra' ? '額外補充' : esc(data.SUPP_SLOTS[log.slot] || '')}${due ? `（該吃 ${esc(due)}）` : ''}</p>
+        <label>幾點吃的<input type="time" name="t" value="${esc((log.taken_at || '').slice(0, 5))}"></label>
+        <div class="dialog-actions">
+          <button type="button" class="btn-ghost" data-clear>不記時間</button>
+          <button type="button" class="btn-ghost" data-cancel>取消</button>
+          <button class="btn-primary">儲存</button>
+        </div>
+      </form>`;
+    const f = $('form', dlg);
+    const save = async (v) => { try { await data.setSupplementLogTime(log.id, v); dlg.close(); await load(); } catch (err) { toast(err.message, true); } };
+    $('[data-cancel]', dlg).onclick = () => dlg.close();
+    $('[data-clear]', dlg).onclick = () => save(null);
+    f.onsubmit = (e) => { e.preventDefault(); save(f.t.value || null); };
+    dlg.showModal();
+    f.t.focus();
+  }
 
   function dialogEl() {
     let dlg = $('#health-dialog');
@@ -166,8 +199,10 @@ function buildHealth(root, { page, day = today() }) {
         <label>名稱<input name="name" required maxlength="80" value="${esc(sp?.name || '')}" placeholder="例如：魚油、維生素 D、益生菌"></label>
         <label>一次的量（可留白）<input name="dose" maxlength="40" value="${esc(sp?.dose || '')}" placeholder="例如：1 顆、2 粒、5ml"></label>
         <fieldset class="hl-slots"><legend>什麼時候吃（可複選）</legend>
-          ${Object.entries(data.SUPP_SLOTS).map(([k, l]) => `<label class="check"><input type="checkbox" name="slot" value="${k}" ${slots.includes(k) ? 'checked' : ''}> ${l}</label>`).join('')}
+          ${Object.entries(data.SUPP_SLOTS).map(([k, l]) => `<div class="hl-slot-row"><label class="check"><input type="checkbox" name="slot" value="${k}" ${slots.includes(k) ? 'checked' : ''}> ${l}</label>
+            <input type="time" name="time_${k}" value="${esc(sp?.slot_times?.[k] || '')}" aria-label="${l}該吃的時間（可留白）" title="該吃的時間（可留白）"></div>`).join('')}
         </fieldset>
+        <label>產品圖網址（可留白，https 開頭）<input name="image_url" type="url" maxlength="1000" value="${esc(sp?.image_url || '')}" placeholder="https://…（在商品頁的圖片上按右鍵「複製圖片網址」）"></label>
         <label>備註（可留白）<input name="note" maxlength="500" value="${esc(sp?.note || '')}" placeholder="例如：飯後吃、和鈣片隔開"></label>
         ${sp ? `<label class="check"><input type="checkbox" name="active" ${sp.active ? 'checked' : ''}> 還在吃（取消勾選＝停用，不出現在每天的清單，紀錄保留）</label>` : ''}
         <div class="dialog-actions">
@@ -187,7 +222,8 @@ function buildHealth(root, { page, day = today() }) {
       e.preventDefault();
       try {
         await data.saveSupplement({ id: sp?.id, name: f.name.value, dose: f.dose.value, note: f.note.value,
-          slots: [...f.querySelectorAll('[name=slot]:checked')].map((x) => x.value), active: sp ? f.active.checked : true });
+          slots: [...f.querySelectorAll('[name=slot]:checked')].map((x) => x.value), active: sp ? f.active.checked : true,
+          slot_times: Object.fromEntries(Object.keys(data.SUPP_SLOTS).map((k) => [k, f[`time_${k}`].value])), image_url: f.image_url.value });
         dlg.close();
         await load();
         toast(sp ? '已儲存' : '已新增，之後每天都會出現在清單裡');
@@ -215,19 +251,31 @@ function buildHealth(root, { page, day = today() }) {
         </li>`).join('')}</ul></div>`).join('') : '<p class="empty">這一天還沒有飲食紀錄。</p>';
     // 保健食品
     const active = supps.filter((s) => s.active);
-    const taken = new Set(logs.filter((l) => l.log_date === d).map((l) => `${l.supplement_id}|${l.slot}`));
+    const dayLogs = logs.filter((l) => l.log_date === d);
+    const logOf = Object.fromEntries(dayLogs.filter((l) => l.slot !== 'extra').map((l) => [`${l.supplement_id}|${l.slot}`, l]));
+    const taken = new Set(Object.keys(logOf));
+    const extrasOf = (id) => dayLogs.filter((l) => l.supplement_id === id && l.slot === 'extra').sort((a, b) => String(a.taken_at || '99').localeCompare(String(b.taken_at || '99')));
+    const hm = (t) => (t ? esc(String(t).slice(0, 5)) : '');
     // 20261121（使用者：保健食品一多，空間被拉很長）：改成表格——時段只在表頭寫一次，一種保健食品一列
     const slotKeys = Object.keys(data.SUPP_SLOTS).filter((sl) => active.some((s) => s.slots.includes(sl)));
     const due = active.reduce((n, s) => n + s.slots.length, 0);
     const done = active.reduce((n, s) => n + s.slots.filter((sl) => taken.has(`${s.id}|${sl}`)).length, 0);
     $('#hl-supp-n', root).textContent = due ? `${done}／${due}` : '';
     $('#hl-supps', root).innerHTML = active.length ? `<table class="hl-supp-table">
-      <thead><tr><th scope="col"><span class="sr-only">保健食品</span></th>${slotKeys.map((sl) => `<th scope="col">${data.SUPP_SLOTS[sl]}</th>`).join('')}</tr></thead>
+      <thead><tr><th scope="col"><span class="sr-only">保健食品</span></th>${slotKeys.map((sl) => `<th scope="col">${data.SUPP_SLOTS[sl]}</th>`).join('')}<th scope="col">額外</th></tr></thead>
       <tbody>${active.map((s) => `<tr>
-        <th scope="row"><button type="button" class="hl-link" data-supp-edit="${s.id}" title="${esc(s.note ? `${s.note}（點一下修改）` : '點一下修改')}">${esc(s.name)}</button>${s.dose ? `<span class="sub">${esc(s.dose)}</span>` : ''}</th>
-        ${slotKeys.map((sl) => `<td>${s.slots.includes(sl)
-          ? `<input type="checkbox" data-take="${s.id}|${sl}" ${taken.has(`${s.id}|${sl}`) ? 'checked' : ''} aria-label="${esc(s.name)} ${data.SUPP_SLOTS[sl]}">`
-          : '<span class="hl-na" aria-hidden="true">·</span>'}</td>`).join('')}
+        <th scope="row"><div class="hl-supp-name">${safeHref(s.image_url) ? `<img class="hl-supp-img" src="${esc(safeHref(s.image_url))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+          <span><button type="button" class="hl-link" data-supp-edit="${s.id}" title="${esc(s.note ? `${s.note}（點一下修改）` : '點一下修改')}">${esc(s.name)}</button>${s.dose ? `<span class="sub">${esc(s.dose)}</span>` : ''}</span></div></th>
+        ${slotKeys.map((sl) => {
+          if (!s.slots.includes(sl)) return '<td><span class="hl-na" aria-hidden="true">·</span></td>';
+          const log = logOf[`${s.id}|${sl}`];
+          const due = s.slot_times?.[sl];
+          return `<td>${due ? `<small class="hl-due" title="該吃的時間">${hm(due)}</small>` : ''}
+            <input type="checkbox" data-take="${s.id}|${sl}" ${log ? 'checked' : ''} aria-label="${esc(s.name)} ${data.SUPP_SLOTS[sl]}">
+            ${log ? `<button type="button" class="hl-taken" data-log-time="${log.id}" title="實際吃的時間（點一下修改）">${hm(log.taken_at) || '記時間'}</button>` : ''}</td>`;
+        }).join('')}
+        <td class="hl-extra">${extrasOf(s.id).map((l) => `<span class="hl-chip"><button type="button" class="hl-taken" data-log-time="${l.id}" title="額外補充的時間（點一下修改）">${hm(l.taken_at) || '？'}</button><button type="button" class="hl-chip-x" data-log-del="${l.id}" aria-label="刪除這筆額外補充">✕</button></span>`).join('')}
+          <button type="button" class="btn-ghost hl-add-extra" data-extra="${s.id}" title="記一筆額外補充" aria-label="${esc(s.name)} 額外補充">＋</button></td>
       </tr>`).join('')}</tbody></table>`
       : '<p class="empty">還沒有保健食品。按右上「＋ 新增保健食品」設定名稱和什麼時候吃，之後每天在這裡打勾。</p>';
     const off = supps.filter((s) => !s.active);
@@ -237,7 +285,7 @@ function buildHealth(root, { page, day = today() }) {
     const st = data.healthStats(supps, logs, weekMeals, d, 7);
     $('#hl-week', root).innerHTML = `
       <div class="hl-week-meals">${st.mealDays.map((x) => `<div class="${x.day === d ? 'is-now' : ''}"><span class="sub">${formatShort(x.day)}（${WEEK[dow(x.day)]}）</span><b>${x.count}</b><small>餐</small></div>`).join('')}</div>
-      ${st.supp.length ? `<ul class="hl-week-supp">${st.supp.map((x) => `<li><span>${esc(x.supp.name)}</span>
+      ${st.supp.length ? `<ul class="hl-week-supp">${st.supp.map((x) => `<li><span>${esc(x.supp.name)}${x.extra ? `<small class="sub">（額外 ${x.extra}）</small>` : ''}</span>
         <span class="progress-bar" role="img" aria-label="吃了 ${x.taken}／${x.planned} 次"><span style="width:${x.pct ?? 0}%"></span></span>
         <span class="sub">${x.planned ? `${x.taken}／${x.planned} 次` : '—'}</span></li>`).join('')}</ul>` : ''}`;
   }

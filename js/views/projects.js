@@ -1,12 +1,12 @@
 // M9 專案與目標（Phase 5）：有「下一步」的長期事項；任務可掛專案／目標，進度＝已完成任務／全部任務
-import * as data from '../data.js?v=202611242148';
-import { state, refreshProjects, refreshTasks, refreshHabits } from '../store.js?v=202611242148';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611242148';
-import { formatShort, today, addDays, weekStart } from '../dates.js?v=202611242148';
-import { enableReorder } from './tasks.js?v=202611242148';
-import { openTaskEditor } from './task-actions.js?v=202611242148';
-import { toggleHabitDay, streakBadge } from './habits.js?v=202611242148';
-import { readSheetFile } from '../sheet-file.js?v=202611242148';
+import * as data from '../data.js?v=202611242202';
+import { state, refreshProjects, refreshTasks, refreshHabits } from '../store.js?v=202611242202';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611242202';
+import { formatShort, today, addDays, weekStart } from '../dates.js?v=202611242202';
+import { enableReorder } from './tasks.js?v=202611242202';
+import { openTaskEditor } from './task-actions.js?v=202611242202';
+import { toggleHabitDay, streakBadge } from './habits.js?v=202611242202';
+import { readSheetFile } from '../sheet-file.js?v=202611242202';
 
 const VIEW_KEY = 'lifeos-pj-view';
 const ui = { status: 'active', view: 'cards', scale: 'week', withWork: false };

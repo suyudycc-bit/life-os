@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611242148';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611242148';
+import { supabase } from './supabase.js?v=202611242202';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611242202';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -989,7 +989,7 @@ const NATURAL_KEY = {
   tools: (r) => `${r.name}|${r.created_at}`,
   meal_logs: (r) => `${r.entry_date}|${r.meal}|${r.foods}|${r.created_at}`,
   supplements: (r) => `${r.name}|${r.created_at}`,
-  supplement_logs: (r) => `${r.supplement_id}|${r.log_date}|${r.slot}`,
+  supplement_logs: (r) => `${r.supplement_id}|${r.log_date}|${r.slot}${r.slot === 'extra' ? `|${r.created_at}` : ''}`, // 額外補充一天可多筆
   energy_logs: (r) => `${r.created_at}|${r.task_id || ''}`,
   task_reschedules: (r) => `${r.task_id}|${r.created_at}`,
 };
@@ -3229,8 +3229,12 @@ export async function saveSupplement(sp) {
   if (!name) throw new Error('請輸入保健食品名稱');
   const slots = (sp.slots || []).filter((x) => SUPP_SLOTS[x]);
   if (!slots.length) throw new Error('請至少選一個吃的時段');
+  // 20261124（回饋 419309a3）：每個時段該吃的時間（HH:MM，可留白）、產品圖（只收 https）
+  const slot_times = Object.fromEntries(slots.map((k) => [k, String(sp.slot_times?.[k] || '').slice(0, 5)]).filter(([, v]) => /^\d{2}:\d{2}$/.test(v)));
+  const image_url = String(sp.image_url || '').trim() || null;
+  if (image_url && !/^https:\/\/\S+$/i.test(image_url)) throw new Error('產品圖網址要是 https:// 開頭');
   const row = { name: name.slice(0, 80), dose: String(sp.dose || '').trim().slice(0, 40) || null, slots,
-    note: String(sp.note || '').trim().slice(0, 500) || null, active: sp.active !== false };
+    note: String(sp.note || '').trim().slice(0, 500) || null, active: sp.active !== false, slot_times, image_url };
   if (sp.id) {
     const rows = must(await supabase.from('supplements').update(row).eq('id', sp.id).select());
     if (rows.length !== 1) throw new Error('找不到這個保健食品（可能已被刪除）');
@@ -3243,15 +3247,33 @@ export const deleteSupplement = (id) => trashDelete('supplements', id);
 export async function listSupplementLogs(from, to) {
   return must(await supabase.from('supplement_logs').select('*').gte('log_date', from).lte('log_date', to));
 }
-/** 打勾／取消：taken＝true 新增一列（已存在就當成功），false 刪掉那一列 */
-export async function setSupplementTaken(supplementId, day, slot, taken) {
+/** 台北現在幾點幾分（HH:MM） */
+export const taipeiNowHM = () => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date());
+const cleanHM = (t) => (t == null || t === '' ? null : /^\d{2}:\d{2}/.test(String(t)) ? String(t).slice(0, 5) : (() => { throw new Error('時間格式不正確'); })());
+
+/** 打勾／取消：taken＝true 新增一列（已存在就當成功），false 刪掉那一列。
+ *  20261124：打勾時記實際吃的時間 takenAt（今天預設現在；以前的日子預設空，之後可補） */
+export async function setSupplementTaken(supplementId, day, slot, taken, takenAt = day === today() ? taipeiNowHM() : null) {
   if (!SUPP_SLOTS[slot]) throw new Error('時段不正確');
   if (taken) {
-    const { error } = await supabase.from('supplement_logs').insert({ supplement_id: supplementId, log_date: day, slot });
+    const { error } = await supabase.from('supplement_logs').insert({ supplement_id: supplementId, log_date: day, slot, taken_at: cleanHM(takenAt) });
     if (error && error.code !== '23505') throw new Error(error.message);
     return;
   }
   must(await supabase.from('supplement_logs').delete().eq('supplement_id', supplementId).eq('log_date', day).eq('slot', slot).select('id'));
+}
+/** 改某一筆實際吃的時間（空＝沒記時間）；核對 1 筆 */
+export async function setSupplementLogTime(logId, time) {
+  const rows = must(await supabase.from('supplement_logs').update({ taken_at: cleanHM(time) }).eq('id', logId).select('id'));
+  if (rows.length !== 1) throw new Error('找不到這筆紀錄（可能已被刪除）');
+}
+/** 額外補充：不在固定時段、一天可以很多筆（slot＝'extra'） */
+export async function addSupplementExtra(supplementId, day, time = day === today() ? taipeiNowHM() : null) {
+  return must(await supabase.from('supplement_logs').insert({ supplement_id: supplementId, log_date: day, slot: 'extra', taken_at: cleanHM(time) }).select().single());
+}
+export async function deleteSupplementLog(logId) {
+  const rows = must(await supabase.from('supplement_logs').delete().eq('id', logId).select('id'));
+  if (rows.length !== 1) throw new Error('找不到這筆紀錄（可能已被刪除）');
 }
 
 /**
@@ -3266,7 +3288,8 @@ export function healthStats(supps, logs, meals, endDay, n = 7) {
     const valid = days.filter((d) => d >= since);
     const planned = valid.length * s.slots.length;
     const taken = valid.reduce((k, d) => k + s.slots.filter((sl) => set.has(`${s.id}|${d}|${sl}`)).length, 0);
-    return { supp: s, taken, planned, pct: planned ? Math.round((taken / planned) * 100) : null };
+    const extra = logs.filter((l) => l.supplement_id === s.id && l.slot === 'extra' && valid.includes(l.log_date)).length; // 額外補充另計，不算進「應吃」
+    return { supp: s, taken, planned, extra, pct: planned ? Math.round((taken / planned) * 100) : null };
   });
   const mealDays = days.map((d) => ({ day: d, count: meals.filter((m) => m.entry_date === d).length }));
   return { days, supp, mealDays };

@@ -1,10 +1,10 @@
 // 收件匣（20261106 使用回饋 S1–S3）：從手機分享進來、想研究卻還沒打開看的連結與文字。
 // 資料在 inbox_items（不在 store，這頁自己讀）；來源判斷、拆網址、「放很久」都在 data.js。
 // 從 iPhone 分享進來：iOS「捷徑」打開 #/inbox/share?text=<URL 編碼的分享內容>（安裝說明見 docs/12-ios-share-shortcut.md）。
-import * as data from '../data.js?v=202611242148';
-import { state, refreshNotes, refreshTasks } from '../store.js?v=202611242148';
-import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js?v=202611242148';
-import { openToolDialog } from './tools.js?v=202611242148';
+import * as data from '../data.js?v=202611242202';
+import { state, refreshNotes, refreshTasks } from '../store.js?v=202611242202';
+import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js?v=202611242202';
+import { openToolDialog } from './tools.js?v=202611242202';
 
 const FILTER_KEY = 'lifeos-inbox-filter';
 const PENDING_KEY = 'lifeos-inbox-share'; // 未登入時先記住分享（sessionStorage），登入後繼續

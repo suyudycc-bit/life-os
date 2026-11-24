@@ -1,12 +1,12 @@
 // 月度手帳（Phase J）：bullet journal 的月誌——月目標、本月一覽（日期直列）、遷移、月回顧。
 // 只讀生活的任務（state.life）；目標是同一份 goals（period＝'YYYY-MM'），「專案與目標」看得到同一筆。
 // 網址：#/month＝本月；#/month/2026-10＝指定月份（年度頁等其他頁可以直接連進來）。
-import * as data from '../data.js?v=202611242148';
-import { state, refreshTasks, refreshProjects } from '../store.js?v=202611242148';
-import { $, esc, toast, confirmDialog, areaChip, foldList } from '../ui.js?v=202611242148';
-import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611242148';
-import { openTaskEditor } from './task-actions.js?v=202611242148';
-import { projectOptions, goalProjectTag } from './projects.js?v=202611242148';
+import * as data from '../data.js?v=202611242202';
+import { state, refreshTasks, refreshProjects } from '../store.js?v=202611242202';
+import { $, esc, toast, confirmDialog, areaChip, foldList } from '../ui.js?v=202611242202';
+import { today, formatShort, formatTime, formatHMS } from '../dates.js?v=202611242202';
+import { openTaskEditor } from './task-actions.js?v=202611242202';
+import { projectOptions, goalProjectTag } from './projects.js?v=202611242202';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const SAVE_DELAY = 800; // 月回顧：停止輸入多久後自動儲存（毫秒）

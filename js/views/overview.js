@@ -1,18 +1,18 @@
 // M1 總覽（Phase 1：今日完成率、今日待辦數、最重要 3 件事、今日待辦清單）
-import * as data from '../data.js?v=202611242148';
-import { state } from '../store.js?v=202611242148';
-import { $, durationHTML, toast, esc, areaChip, confirmDialog, foldList } from '../ui.js?v=202611242148';
-import { refreshNotes, refreshTasks } from '../store.js?v=202611242148';
-import { habitRowHTML, bindHabitDays } from './habits.js?v=202611242148';
-import { openNoteDialog } from './notes.js?v=202611242148';
-import { openExternalEvent, extTime } from './google-sync.js?v=202611242148';
-import { today, formatShort, localDate, addDays } from '../dates.js?v=202611242148';
-import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611242148';
-import { taskItemHTML } from './task-item.js?v=202611242148';
-import { bindTaskList } from './task-actions.js?v=202611242148';
-import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611242148';
-import { saveInboxFilter } from './inbox.js?v=202611242148';
-import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611242148';
+import * as data from '../data.js?v=202611242202';
+import { state } from '../store.js?v=202611242202';
+import { $, durationHTML, toast, esc, areaChip, confirmDialog, foldList } from '../ui.js?v=202611242202';
+import { refreshNotes, refreshTasks } from '../store.js?v=202611242202';
+import { habitRowHTML, bindHabitDays } from './habits.js?v=202611242202';
+import { openNoteDialog } from './notes.js?v=202611242202';
+import { openExternalEvent, extTime } from './google-sync.js?v=202611242202';
+import { today, formatShort, localDate, addDays } from '../dates.js?v=202611242202';
+import { bindOverdueList, overdueListHTML } from './overdue-list.js?v=202611242202';
+import { taskItemHTML } from './task-item.js?v=202611242202';
+import { bindTaskList } from './task-actions.js?v=202611242202';
+import { coverHTML, bindCoverFallback, saveMediaFilter } from './media.js?v=202611242202';
+import { saveInboxFilter } from './inbox.js?v=202611242202';
+import { dailyCardOf, cardPool, cardText } from '../quotes.js?v=202611242202';
 
 // 「第一次使用？」提示：這台裝置第一次打開（整個頁面載入期間都算），或還沒有任何任務時顯示；
 // 按 ✕ 後不再出現（記在這台裝置的瀏覽器）。在模組層讀一次，避免總覽重掛載時把「第一次」吃掉。
