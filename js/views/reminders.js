@@ -1,8 +1,8 @@
 // 提醒設定（20261117，回饋 4c43dd7a）：網站推播（早上「今天要做的」、晚上「還沒做完的」）＋Google 日曆提醒說明。
 // 推播由 Edge Function push-reminders 依 reminder_settings 送出；這台裝置要先允許通知、訂閱，存進 push_subscriptions。
 // iPhone：要先在 Safari 按分享 →「加入主畫面」，從主畫面打開的網站才能收通知（iOS 16.4 起，Apple 的限制）。
-import * as data from '../data.js?v=202611221644';
-import { $, esc, toast } from '../ui.js?v=202611221644';
+import * as data from '../data.js?v=202611242049';
+import { $, esc, toast } from '../ui.js?v=202611242049';
 
 const supported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

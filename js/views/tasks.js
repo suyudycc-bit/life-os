@@ -1,16 +1,16 @@
 // M2 任務管理（Phase 1：建立、列表、篩選、星標、編輯、刪除、完成；計時於 Phase 2）
-import * as data from '../data.js?v=202611221644';
-import { state, refreshTasks, refreshAreas } from '../store.js?v=202611221644';
-import { $, esc, toast, PRIORITY } from '../ui.js?v=202611221644';
-import { today } from '../dates.js?v=202611221644';
-import { taskItemHTML } from './task-item.js?v=202611221644';
-import { bindTaskList } from './task-actions.js?v=202611221644';
-import { openAreaDialog } from './area-dialog.js?v=202611221644';
+import * as data from '../data.js?v=202611242049';
+import { state, refreshTasks, refreshAreas } from '../store.js?v=202611242049';
+import { $, esc, toast, PRIORITY } from '../ui.js?v=202611242049';
+import { today } from '../dates.js?v=202611242049';
+import { taskItemHTML } from './task-item.js?v=202611242049';
+import { bindTaskList } from './task-actions.js?v=202611242049';
+import { openAreaDialog } from './area-dialog.js?v=202611242049';
 
 const ADD_AREA = '__add__';
 
 const FILTER_KEY = 'lifeos-task-filter';
-const filter = { range: 'all', areaId: '', priority: '', showDone: false, group: true, q: '' };
+const filter = { range: 'all', areaId: '', projectId: '', priority: '', showDone: false, group: true, q: '' };
 try { Object.assign(filter, JSON.parse(localStorage.getItem(FILTER_KEY) || '{}'), { q: '' }); } catch { /* 忽略 */ }
 
 export function mountTasks(root) {
@@ -20,6 +20,7 @@ export function mountTasks(root) {
       <form id="quick-add" class="quick-add">
         <input name="title" placeholder="新增任務，按 Enter 建立" aria-label="任務名稱" autocomplete="off" required>
         <select name="area_id" aria-label="領域"></select>
+        <select name="project_id" aria-label="專案"></select>
         <select name="priority" aria-label="優先級">
           <option value="1">高</option><option value="2" selected>中</option><option value="3">低</option>
         </select>
@@ -33,6 +34,7 @@ export function mountTasks(root) {
           ${Object.entries(data.RANGES).map(([k, l]) => `<button type="button" data-v="${k}">${l}</button>`).join('')}
         </div>
         <select id="f-area" aria-label="篩選領域"></select>
+        <select id="f-project" aria-label="篩選專案"></select>
         <select id="f-priority" aria-label="篩選優先級">
           <option value="">全部優先級</option>
           ${[1, 2, 3].map((p) => `<option value="${p}">${PRIORITY[p]}優先</option>`).join('')}
@@ -52,6 +54,7 @@ export function mountTasks(root) {
       const created = await data.createTask({
         title: f.get('title'),
         area_id: f.get('area_id'),
+        project_id: f.get('project_id') || null,
         priority: Number(f.get('priority')),
         due_date: f.get('due_date') || null,
       }, state.tasks);
@@ -85,6 +88,12 @@ export function mountTasks(root) {
     if (b) setFilter({ range: b.dataset.v });
   });
   $('#f-area', root).onchange = (e) => setFilter({ areaId: e.target.value });
+  $('#f-project', root).onchange = (e) => setFilter({ projectId: e.target.value });
+  // 20261124（回饋 91d0f64e）：選了專案，領域跟著專案走（任務和專案同一個領域）
+  form.project_id.addEventListener('change', () => {
+    const p = state.projects.find((x) => x.id === form.project_id.value);
+    if (p && state.life.areas.some((a) => a.id === p.area_id)) form.area_id.value = lastArea = p.area_id;
+  });
   $('#f-priority', root).onchange = (e) => setFilter({ priority: e.target.value });
   $('#f-done', root).onchange = (e) => setFilter({ showDone: e.target.checked });
   $('#f-group', root).onchange = (e) => setFilter({ group: e.target.checked });
@@ -123,6 +132,17 @@ export function mountTasks(root) {
     qa.innerHTML = `${areaOpts}<option value="${ADD_AREA}">＋ 新增領域…</option>`;
     qa.value = keep || filter.areaId || state.life.areas[0]?.id || '';
     if (!qa.value && state.life.areas[0]) qa.value = state.life.areas[0].id;
+
+    // 專案：新增欄只列進行中的生活專案；篩選列出全部生活專案（記住的專案不見了就清掉）
+    const lifeProjects = [...state.life.projects].sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || a.name.localeCompare(b.name, 'zh-Hant'));
+    const qp = form.project_id;
+    const keepP = qp.value;
+    qp.innerHTML = `<option value="">不掛專案</option>${lifeProjects.filter((p) => p.status === 'active').map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}`;
+    qp.value = keepP || (filter.projectId && filter.projectId !== 'none' ? filter.projectId : '');
+    if (filter.projectId && filter.projectId !== 'none' && !lifeProjects.some((p) => p.id === filter.projectId)) filter.projectId = '';
+    const fp = $('#f-project', root);
+    fp.innerHTML = `<option value="">全部專案</option><option value="none">沒有專案</option>${lifeProjects.map((p) => `<option value="${p.id}">${esc(p.name)}${p.status === 'active' ? '' : '（' + (data.PROJECT_STATUS?.[p.status] || p.status) + '）'}</option>`).join('')}`;
+    fp.value = filter.projectId;
 
     const fa = $('#f-area', root);
     fa.innerHTML = `<option value="">全部領域</option>${areaOpts}`;

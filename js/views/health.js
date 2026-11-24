@@ -1,8 +1,8 @@
 // 飲食與保健（20261116，來自回饋 ec337946）：每天的飲食紀錄＋保健食品打勾，下方是近 7 天統計。
 // 資料在 meal_logs、supplements、supplement_logs（不在 store，這頁自己讀）；存取與統計都在 data.js「飲食與保健」段。
-import * as data from '../data.js?v=202611221644';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611221644';
-import { today, addDays, formatShort } from '../dates.js?v=202611221644';
+import * as data from '../data.js?v=202611242049';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242049';
+import { today, addDays, formatShort } from '../dates.js?v=202611242049';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const dow = (d) => new Date(`${d}T00:00:00`).getDay();

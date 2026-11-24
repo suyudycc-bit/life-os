@@ -4,12 +4,12 @@
 // 數字的算法都在 data.js（yearStats、futureLogMonths），這裡只顯示。
 // 終點身分（20261108 顯化規劃・階段二）＝年度那一筆 period_reviews 的 vision_identity／vision_senses；
 // 身分主線＝goals.mainline（不另存清單；目標對話框、專案卡片、總覽讀同一欄）。
-import * as data from '../data.js?v=202611221644';
-import { state, refreshProjects } from '../store.js?v=202611221644';
-import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611221644';
-import { today, formatShort } from '../dates.js?v=202611221644';
-import { openGoalDialog, projectOptions, goalProjectTag } from './projects.js?v=202611221644';
-import { openTaskEditor } from './task-actions.js?v=202611221644';
+import * as data from '../data.js?v=202611242049';
+import { state, refreshProjects } from '../store.js?v=202611242049';
+import { $, esc, toast, confirmDialog, areaChip } from '../ui.js?v=202611242049';
+import { today, formatShort } from '../dates.js?v=202611242049';
+import { openGoalDialog, projectOptions, goalProjectTag } from './projects.js?v=202611242049';
+import { openTaskEditor } from './task-actions.js?v=202611242049';
 
 const SAVE_DELAY = 800; // 回顧停止輸入多久後自動儲存（同每日復盤）
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];

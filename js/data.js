@@ -1,7 +1,7 @@
 // 唯一的資料存取與衍生計算模組（.claude/rules/data-integrity.md）
 // UI 只呼叫這裡，不直接操作 supabase，也不自行計算完成率等數字。
-import { supabase } from './supabase.js?v=202611221644';
-import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611221644';
+import { supabase } from './supabase.js?v=202611242049';
+import { today, addDays, localDate, weekStart, dayStartISO, toLocalInput, fromLocalInput } from './dates.js?v=202611242049';
 
 function must({ data, error }) {
   if (error) throw new Error(error.message || String(error));
@@ -1209,6 +1209,8 @@ export function filterTasks(tasks, f, day = today()) {
     if (!f.showDone && !isOpen(t)) return false;
     if (f.areaId && t.area_id !== f.areaId) return false;
     if (f.priority && String(t.priority) !== String(f.priority)) return false;
+    // 20261124（回饋 91d0f64e）：依專案篩選；'none'＝沒有掛專案
+    if (f.projectId && (f.projectId === 'none' ? t.project_id : t.project_id !== f.projectId)) return false;
     // 20261121：搜尋標題（不分大小寫、可多個詞，全部都要有）
     if (f.q && !String(f.q).toLowerCase().split(/\s+/).filter(Boolean).every((w) => t.title.toLowerCase().includes(w))) return false;
     const d = taskDay(t);
