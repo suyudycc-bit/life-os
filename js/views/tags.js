@@ -1,9 +1,9 @@
 // 標籤與分類（#/tags，20261106 G3）：一頁管理領域、看板標籤、各種自由標籤與分類。
 // 資料函式都在 data.js「標籤管理 20261106（E）」段落；這裡只負責顯示與確認。
 // 改名／刪除前先說明會影響幾筆並確認；更新後由資料層檢查實際筆數。
-import * as data from '../data.js?v=202611242049';
-import { state, reloadAll } from '../store.js?v=202611242049';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242049';
+import * as data from '../data.js?v=202611242148';
+import { state, reloadAll } from '../store.js?v=202611242148';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242148';
 
 const PALETTE = ['#3b6fd8', '#8a5cd6', '#e08a2e', '#2f9e6b', '#d64f7a', '#1f9bb0', '#7a8b2e', '#b5652b', '#5560c9', '#8f6b4a'];
 const FREE_SCOPES = ['note', 'media', 'bucket', 'inbox', 'contact'];

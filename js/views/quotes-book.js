@@ -1,10 +1,10 @@
 // 佳句本（20261112，來自回饋 8cd19a58）：記錄佳句，可掛書影單的一本；勾「放進每日一句」的會和內建句子混合出現在總覽。
 // 資料在 quotes（不在 store，這頁自己讀）；存取都在 data.js「佳句本」段，混合規則在 quotes.js。
 // 網址 #/quotes/<書影單 id> 會直接篩出那一本的佳句（書影單卡片的「佳句 n」連到這裡）。
-import * as data from '../data.js?v=202611242049';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242049';
-import { formatShort, localDate } from '../dates.js?v=202611242049';
-import { OCR_LANGS } from '../ocr.js?v=202611242049';
+import * as data from '../data.js?v=202611242148';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242148';
+import { formatShort, localDate } from '../dates.js?v=202611242148';
+import { OCR_LANGS } from '../ocr.js?v=202611242148';
 
 const MEDIA_KIND = { book: '書', movie: '電影', tv: '影集', podcast: 'Podcast', course: '課程' };
 
@@ -77,7 +77,7 @@ export function mountQuotes(root) {
     if (!file) return;
     ocrBtn.disabled = true;
     try {
-      const { recognizeImage } = await import('../ocr.js?v=202611242049');
+      const { recognizeImage } = await import('../ocr.js?v=202611242148');
       const { text, confidence, lang } = await recognizeImage(file, $('#qb-ocr-lang', root).value, (p, label) => {
         ocrStatus.textContent = `${label}… ${Math.round(p * 100)}%`;
       });
@@ -196,10 +196,13 @@ export function mountQuotes(root) {
     const list = data.filterQuotes(quotes, { q: ui.q, mediaId: linked.some((m) => m.id === ui.mediaId) ? ui.mediaId : '' }, byId);
     $('#qb-list', root).innerHTML = list.length ? list.map((x) => {
       const m = byId[x.media_id];
-      const cite = [x.author, x.source].filter(Boolean).join('，');
+      // 20261124（回饋 76e6a127）：有掛書影單就一定連得過去——出處寫的就是書名時，出處本身變成連結；寫了別的就在後面另外附書名連結
+      const link = m ? `<a href="#/media" title="到書影單">${esc(m.title)}</a>` : '';
+      const srcHTML = !x.source ? link : m && x.source === m.title ? link : `${esc(x.source)}${link ? `・${link}` : ''}`;
+      const citeHTML = [x.author ? esc(x.author) : '', srcHTML].filter(Boolean).join('，');
       return `<li class="qb-item" data-id="${x.id}">
         <blockquote class="qb-body">${esc(x.body)}</blockquote>
-        ${cite || m ? `<p class="qb-cite">— ${esc(cite)}${m && x.source !== m.title ? `${cite ? '・' : ''}<a href="#/media">${esc(m.title)}</a>` : ''}</p>` : ''}
+        ${citeHTML ? `<p class="qb-cite">— ${citeHTML}</p>` : ''}
         ${x.thought ? `<p class="qb-thought">${esc(x.thought)}</p>` : ''}
         <div class="qb-foot">
           <span class="sub">${formatShort(localDate(x.created_at))}</span>

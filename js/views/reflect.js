@@ -1,10 +1,10 @@
 // 內在整理（顯化規劃・階段三，20261108）：轉念／釋放／我允許三種便籤，共用 reflections 表。
 // 資料不在 store，這頁自己讀；儲存、篩選、統計、轉任務都在 data.js「內在整理 20261108」，這裡只負責畫面。
-import * as data from '../data.js?v=202611242049';
-import { state, refreshTasks } from '../store.js?v=202611242049';
-import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242049';
-import { openTaskEditor } from './task-actions.js?v=202611242049';
-import { today } from '../dates.js?v=202611242049';
+import * as data from '../data.js?v=202611242148';
+import { state, refreshTasks } from '../store.js?v=202611242148';
+import { $, esc, toast, confirmDialog } from '../ui.js?v=202611242148';
+import { openTaskEditor } from './task-actions.js?v=202611242148';
+import { today } from '../dates.js?v=202611242148';
 
 const FILTER_KEY = 'lifeos-reflect-filter';
 const KIND_HINT = {

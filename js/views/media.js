@@ -1,10 +1,10 @@
 // 書影單（Phase J）：書、電影、影集、Podcast、課程。像貼在手帳上的票根：左邊封面、右邊撕線後的資料。
 // 資料只呼叫 data.js「手帳（Phase J）」的書影單函式；封面搜尋在 covers.js。
-import * as data from '../data.js?v=202611242049';
-import { refreshNotes } from '../store.js?v=202611242049';
-import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js?v=202611242049';
-import { today, formatShort } from '../dates.js?v=202611242049';
-import { searchCovers, canSearchCover, COVER_SEARCH } from '../covers.js?v=202611242049';
+import * as data from '../data.js?v=202611242148';
+import { refreshNotes } from '../store.js?v=202611242148';
+import { $, esc, toast, confirmDialog, linkLabel, safeHref } from '../ui.js?v=202611242148';
+import { today, formatShort } from '../dates.js?v=202611242148';
+import { searchCovers, canSearchCover, COVER_SEARCH } from '../covers.js?v=202611242148';
 
 const { MEDIA_KINDS, MEDIA_STATUS } = data;
 // 各類型的動詞：想讀／想看／想聽／想上
